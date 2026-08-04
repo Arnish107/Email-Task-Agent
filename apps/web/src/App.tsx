@@ -24,6 +24,19 @@ const STATUS_LABELS: Record<string, string> = {
   "": "All statuses",
 };
 
+function AmbientBackground() {
+  return (
+    <>
+      <div className="ambient" aria-hidden="true">
+        <div className="gradient-blob blob-a" />
+        <div className="gradient-blob blob-b" />
+        <div className="gradient-blob blob-c" />
+      </div>
+      <div className="noise-overlay" aria-hidden="true" />
+    </>
+  );
+}
+
 function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -44,40 +57,60 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   }
 
   return (
-    <div className="login-wrap">
-      <div className="login-stage">
-        <div className="login-visual" aria-hidden="true">
-          <div className="login-visual-glow" />
-          <div className="login-visual-grid" />
-        </div>
-        <form className="panel login-card stack" onSubmit={submit}>
-          <div className="brand brand-hero">
-            <p className="brand-kicker">Mailbox → review → export</p>
-            <h1>Email Task Agent</h1>
-            <p>
-              Connect a mailbox, surface compliance actions worth reviewing, and
-              export approved tasks — nothing ships without your sign-off.
-            </p>
+    <div className="app-root">
+      <AmbientBackground />
+      <div className="login-wrap">
+        <div className="login-stage glass">
+          <div className="login-visual glass-strong" aria-hidden="true">
+            <div className="login-visual-glow" />
+            <div className="login-visual-grid" />
+            <div className="login-visual-copy">
+              <p className="brand-kicker">Human review first</p>
+              <h2>
+                Mail in. Tasks out.{" "}
+                <span className="text-gradient">Nothing silent.</span>
+              </h2>
+              <p>
+                Connect a mailbox, scan for compliance actions, and export only
+                what you approve.
+              </p>
+            </div>
           </div>
-          {error && <div className="banner error">{error}</div>}
-          <label>
-            Work email
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-              placeholder="you@yourcounty.gov"
-              required
-              autoFocus
-            />
-          </label>
-          <button className="btn btn-lg" disabled={busy} type="submit">
-            {busy ? "Signing in…" : "Continue"}
-          </button>
-          <p className="meta login-footnote">
-            Read-only mailbox access. Human review before every export.
-          </p>
-        </form>
+          <form className="panel login-card stack" onSubmit={submit}>
+            <div className="brand brand-hero">
+              <div className="logo-mark">
+                <span className="logo-dot" />
+                Email Task Agent
+              </div>
+              <h1>
+                Sign in to{" "}
+                <span className="text-gradient">review your queue</span>
+              </h1>
+              <p>
+                Read-only mailbox access. Every candidate needs your sign-off
+                before it becomes an exported task.
+              </p>
+            </div>
+            {error && <div className="banner error">{error}</div>}
+            <label>
+              Work email
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                placeholder="you@yourcounty.gov"
+                required
+                autoFocus
+              />
+            </label>
+            <button className="btn btn-lg" disabled={busy} type="submit">
+              {busy ? "Signing in…" : "Continue"}
+            </button>
+            <p className="meta login-footnote">
+              Demo auth for this prototype — use any work email to continue.
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -166,11 +199,11 @@ function CandidateDetail({
   }
 
   if (!candidate) {
-    return <div className="panel">{error ?? "Loading candidate…"}</div>;
+    return <div className="panel glass">{error ?? "Loading candidate…"}</div>;
   }
 
   return (
-    <div className="panel drawer">
+    <div className="panel drawer glass-strong">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h2>Review candidate</h2>
         <span className="pill">{candidate.status}</span>
@@ -476,15 +509,13 @@ function Dashboard({
   }, [jobs]);
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <p className="brand-kicker">Email Task Agent</p>
-          <h1>Review before anything becomes a task</h1>
-          <p>
-            Connect Gmail, Outlook, or IMAP. We scan for high-signal compliance
-            mail, you approve with evidence, then export JSON.
-          </p>
+    <div className="app-root">
+      <AmbientBackground />
+      <div className="app-shell">
+      <nav className="top-nav glass" aria-label="Account">
+        <div className="logo-mark">
+          <span className="logo-dot" />
+          Email Task Agent
         </div>
         <div className="row topbar-actions">
           <span className="pill muted">{user.email}</span>
@@ -499,6 +530,20 @@ function Dashboard({
             Sign out
           </button>
         </div>
+      </nav>
+
+      <header className="topbar">
+        <div className="brand">
+          <p className="brand-kicker">Mailbox → review → export</p>
+          <h1>
+            Review before anything{" "}
+            <span className="text-gradient">becomes a task</span>
+          </h1>
+          <p>
+            Connect Gmail, Outlook, or IMAP. We scan for high-signal compliance
+            mail, you approve with evidence, then export JSON.
+          </p>
+        </div>
       </header>
 
       <ol className="workflow-rail" aria-label="Workflow steps">
@@ -512,7 +557,7 @@ function Dashboard({
       {error && <div className="banner error">{error}</div>}
 
       <div className="grid grid-2">
-        <section className="panel stack panel-enter">
+        <section className="panel stack panel-enter hover-glow">
           <div className="section-head">
             <span className="step-index">01</span>
             <h2>Connect mailbox</h2>
@@ -859,7 +904,7 @@ function Dashboard({
           )}
         </section>
 
-        <section className="panel stack panel-enter panel-enter-delay">
+        <section className="panel stack panel-enter panel-enter-delay hover-glow">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <div className="section-head">
               <span className="step-index">03</span>
@@ -954,10 +999,11 @@ function Dashboard({
             }}
           />
         ) : (
-          <div className="panel empty detail-placeholder">
+          <div className="panel empty detail-placeholder glass">
             Select a candidate to review evidence, edit fields, and approve.
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -977,10 +1023,13 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="login-wrap">
-        <div className="loading-mark" aria-live="polite">
-          <span className="loading-dot" />
-          Loading Email Task Agent…
+      <div className="app-root">
+        <AmbientBackground />
+        <div className="login-wrap">
+          <div className="loading-mark" aria-live="polite">
+            <span className="loading-dot" />
+            Loading Email Task Agent…
+          </div>
         </div>
       </div>
     );
