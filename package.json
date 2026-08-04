@@ -11,10 +11,20 @@
     "dev:api": "npm run dev -w @email-task-agent/api",
     "dev:web": "npm run dev -w @email-task-agent/web",
     "build": "npm run build -w @email-task-agent/api && npm run build -w @email-task-agent/web",
+    "build:web": "npm run build -w @email-task-agent/web",
     "test": "npm run test -w @email-task-agent/api",
     "migrate": "npm run migrate -w @email-task-agent/api",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
+  },
+  "dependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.1"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

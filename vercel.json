@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm install --include=dev",
-  "buildCommand": "npm run build -w @email-task-agent/web",
+  "installCommand": "npm install --include=dev --install-strategy=hoisted",
+  "buildCommand": "npm run build:web",
   "outputDirectory": "apps/web/dist",
   "framework": null,
   "rewrites": [
