@@ -5,7 +5,7 @@ import { migrate } from "./db/migrate.js";
 async function main() {
   await migrate();
   const app = createApp();
-  app.listen(config.port, () => {
+  app.listen(config.port, "0.0.0.0", () => {
     console.log(`Email Task Agent API listening on ${config.appBaseUrl}`);
   });
 }

@@ -17,7 +17,10 @@ function required(name: string, fallback?: string): string {
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   nodeEnv: process.env.NODE_ENV ?? "development",
-  appBaseUrl: process.env.APP_BASE_URL ?? "http://localhost:4000",
+  appBaseUrl:
+    process.env.APP_BASE_URL ??
+    process.env.RENDER_EXTERNAL_URL ??
+    "http://localhost:4000",
   webBaseUrl: process.env.WEB_BASE_URL ?? "http://localhost:5173",
   sessionSecret: required("SESSION_SECRET", "dev-session-secret-change-me"),
   tokenEncryptionKey: required(

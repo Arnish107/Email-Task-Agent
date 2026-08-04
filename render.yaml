@@ -1,0 +1,41 @@
+# Render Blueprint — deploy the API as a long-running Node service.
+# Dashboard: https://dashboard.render.com/select-repo?type=blueprint
+# Frontend stays on Vercel; set VITE_API_BASE_URL there to this service URL.
+
+services:
+  - type: web
+    name: email-task-agent-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: npm install --include=dev && npm run build -w @email-task-agent/api
+    startCommand: npm run start -w @email-task-agent/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: pglite
+      - key: USE_PGLITE
+        value: "true"
+      - key: DEMO_AUTH_ENABLED
+        value: "true"
+      - key: ENABLE_FIXTURE_PROVIDER
+        value: "true"
+      - key: WEB_BASE_URL
+        # Production Vercel frontend
+        value: https://email-task-agent-xi.vercel.app
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+      # Optional LLM extraction
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
