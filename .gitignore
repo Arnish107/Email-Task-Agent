@@ -14,3 +14,4 @@ apps/api/data/pglite/
 apps/api/data/entities.synced.json
 
 *.tsbuildinfo
+.vercel

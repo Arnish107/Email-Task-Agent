@@ -80,7 +80,11 @@ export class ImapProvider implements EmailProvider {
       try {
         await client.logout();
       } catch {
-        await client.close().catch(() => undefined);
+        try {
+          client.close();
+        } catch {
+          // ignore close errors
+        }
       }
     }
   }

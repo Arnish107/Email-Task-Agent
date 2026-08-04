@@ -55,13 +55,33 @@ Default DB is embedded **PGlite** (`DATABASE_URL=pglite`) — no Docker required
 3. Enable Gmail API; set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
 4. Click **Connect Gmail (readonly)**
 
-## Deploy (Vercel frontend)
+## Deploy (Vercel frontend + Render API)
 
-Host the **API separately**. This Express + PGlite/Postgres API is not meant to run as a Vercel serverless function.
+The Vite app on Vercel is static only. Login (`POST /api/auth/login`) must hit a separate Node API — otherwise the browser shows **405**.
 
-1. Deploy this repo on Vercel (`vercel.json` builds `apps/web`)
-2. Set `VITE_API_BASE_URL` to your public API origin
-3. On the API host, set `WEB_BASE_URL` to the Vercel URL and `APP_BASE_URL` to the API origin (HTTPS required for cross-site cookies)
+### 1. API on Render
+
+1. Open [Render Blueprint](https://dashboard.render.com/select-repo?type=blueprint) and connect `Arnish107/Email-Task-Agent`.
+2. Render reads `render.yaml` and creates **email-task-agent-api**.
+3. After deploy, copy the service URL (e.g. `https://email-task-agent-api.onrender.com`).
+4. Optional: set `GEMINI_API_KEY` / Gmail OAuth vars in the Render dashboard.
+5. Free tier sleeps when idle — first request after sleep can take 30–60s.
+
+### 2. Point Vercel at the API
+
+In the **email-task-agent** Vercel project → **Settings → Environment Variables**:
+
+| Name | Value |
+| --- | --- |
+| `VITE_API_BASE_URL` | `https://YOUR-API.onrender.com` (no trailing slash) |
+
+Redeploy the frontend after saving (Vite reads this at **build** time).
+
+Confirm Render `WEB_BASE_URL` is `https://email-task-agent-xi.vercel.app` (CORS + cookies).
+
+### Local
+
+Leave `VITE_API_BASE_URL` unset so the Vite `/api` proxy uses `localhost:4000`.
 
 ## Tests
 

@@ -50,14 +50,16 @@ candidatesRouter.get("/:id", async (req, res) => {
     return;
   }
 
-  const candidate = result.rows[0];
-  const entitySuggestions = candidate.entity_hint
-    ? [matchEntity(candidate.entity_hint)].filter(Boolean)
+  const candidate = result.rows[0] as Record<string, unknown>;
+  const entityHint =
+    typeof candidate.entity_hint === "string" ? candidate.entity_hint : "";
+  const entitySuggestions = entityHint
+    ? [matchEntity(entityHint)].filter(Boolean)
     : [];
 
   let duplicates: unknown[] = [];
   const dupeIds = Array.isArray(candidate.possible_duplicate_ids)
-    ? candidate.possible_duplicate_ids
+    ? (candidate.possible_duplicate_ids as string[])
     : [];
   if (dupeIds.length) {
     const dupes = await pool.query(
@@ -131,14 +133,14 @@ candidatesRouter.patch("/:id", async (req, res) => {
 });
 
 async function getOwnedCandidate(id: string, userId: string) {
-  const result = await pool.query(
+  const result = await pool.query<Record<string, unknown>>(
     `SELECT c.*, m.provider, m.user_id
      FROM email_task_candidates c
      JOIN mailbox_connections m ON m.id = c.mailbox_connection_id
      WHERE c.id = $1 AND m.user_id = $2`,
     [id, userId],
   );
-  return result.rows[0];
+  return result.rows[0] ?? null;
 }
 
 candidatesRouter.post("/:id/approve", async (req, res) => {
@@ -200,7 +202,7 @@ candidatesRouter.post("/:id/approve", async (req, res) => {
 
   await writeAuditLog({
     userId: req.user!.id,
-    mailboxConnectionId: existing.mailbox_connection_id,
+    mailboxConnectionId: String(existing.mailbox_connection_id ?? ""),
     eventType: "candidate_approved",
     details: { candidateId: req.params.id },
   });
@@ -223,7 +225,7 @@ candidatesRouter.post("/:id/ignore", async (req, res) => {
   );
   await writeAuditLog({
     userId: req.user!.id,
-    mailboxConnectionId: existing.mailbox_connection_id,
+    mailboxConnectionId: String(existing.mailbox_connection_id ?? ""),
     eventType: "candidate_ignored",
     details: { candidateId: req.params.id },
   });
@@ -245,7 +247,7 @@ candidatesRouter.post("/:id/duplicate", async (req, res) => {
   );
   await writeAuditLog({
     userId: req.user!.id,
-    mailboxConnectionId: existing.mailbox_connection_id,
+    mailboxConnectionId: String(existing.mailbox_connection_id ?? ""),
     eventType: "candidate_marked_duplicate",
     details: { candidateId: req.params.id },
   });
@@ -292,13 +294,13 @@ candidatesRouter.post("/export", async (req, res) => {
       );
       await writeAuditLog({
         userId: req.user!.id,
-        mailboxConnectionId: row.mailbox_connection_id,
+        mailboxConnectionId: String(row.mailbox_connection_id ?? ""),
         eventType: "task_exported",
         details: { candidateId: row.id },
       });
     } catch (err) {
       errors.push({
-        id: row.id,
+        id: String(row.id),
         error: err instanceof Error ? err.message : String(err),
       });
     }
