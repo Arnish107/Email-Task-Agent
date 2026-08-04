@@ -1,0 +1,13 @@
+{
+  "provider": "fixture",
+  "messageId": "fix-portal-link",
+  "threadId": "thread-portal",
+  "subject": "Upload audited financial statements",
+  "from": "filings@dca.ga.gov",
+  "to": ["finance@dekalbcountyga.gov"],
+  "cc": [],
+  "sentAt": "2026-07-27T16:15:00.000Z",
+  "bodyText": "DeKalb County must upload audited financial statements to Georgia DCA by August 15, 2026.\n\nPortal: https://portal.dca.ga.gov/login/afs\n\nFinance department action required.",
+  "links": ["https://portal.dca.ga.gov/login/afs"],
+  "attachments": []
+}

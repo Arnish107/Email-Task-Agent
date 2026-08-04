@@ -1,0 +1,13 @@
+{
+  "provider": "fixture",
+  "messageId": "fix-multi-task",
+  "threadId": "thread-multi",
+  "subject": "Two compliance items for Gwinnett County",
+  "from": "ops@dca.ga.gov",
+  "to": ["admin@gwinnettcounty.com"],
+  "cc": [],
+  "sentAt": "2026-07-29T13:20:00.000Z",
+  "bodyText": "Gwinnett County must complete the following:\n\n1) Submit the quarterly performance report to Georgia DCA by October 15, 2026.\n2) Renew the subrecipient monitoring checklist and return it to Georgia DCA by November 1, 2026.\n\nPlease confirm receipt.",
+  "links": [],
+  "attachments": []
+}

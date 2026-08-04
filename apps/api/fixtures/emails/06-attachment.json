@@ -1,0 +1,18 @@
+{
+  "provider": "fixture",
+  "messageId": "fix-attachment",
+  "threadId": "thread-attachment",
+  "subject": "Sign and return Form LG-204",
+  "from": "forms@hud.gov",
+  "to": ["housing@atlantaga.gov"],
+  "cc": [],
+  "sentAt": "2026-07-26T11:45:00.000Z",
+  "bodyText": "City of Atlanta staff must sign and return Form LG-204 by September 1, 2026.\n\nThe form PDF is attached. Please submit the signed copy to HUD.",
+  "links": [],
+  "attachments": [
+    {
+      "filename": "Form-LG-204.pdf",
+      "mimeType": "application/pdf"
+    }
+  ]
+}

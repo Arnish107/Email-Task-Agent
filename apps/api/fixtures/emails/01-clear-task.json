@@ -1,0 +1,13 @@
+{
+  "provider": "fixture",
+  "messageId": "fix-clear-task",
+  "threadId": "thread-clear-task",
+  "subject": "Action required: Submit FY2026 CDBG report",
+  "from": "reports@dca.ga.gov",
+  "to": ["clerk@troupcountyga.gov"],
+  "cc": [],
+  "sentAt": "2026-07-28T14:30:00.000Z",
+  "bodyText": "Dear Troup County staff,\n\nPlease submit the FY2026 CDBG annual report to Georgia DCA no later than September 30, 2026.\n\nUpload the completed forms through the grants portal: https://portal.dca.ga.gov/submit/cdbg\n\nThank you.",
+  "links": ["https://portal.dca.ga.gov/submit/cdbg"],
+  "attachments": []
+}

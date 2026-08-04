@@ -1,0 +1,32 @@
+[
+  {
+    "id": "entity-troup",
+    "name": "Troup County",
+    "type": "county",
+    "code": "troup"
+  },
+  {
+    "id": "entity-fulton",
+    "name": "Fulton County",
+    "type": "county",
+    "code": "fulton"
+  },
+  {
+    "id": "entity-dekalb",
+    "name": "DeKalb County",
+    "type": "county",
+    "code": "dekalb"
+  },
+  {
+    "id": "entity-atlanta",
+    "name": "City of Atlanta",
+    "type": "city",
+    "code": "atlanta"
+  },
+  {
+    "id": "entity-gwinnett",
+    "name": "Gwinnett County",
+    "type": "county",
+    "code": "gwinnett"
+  }
+]

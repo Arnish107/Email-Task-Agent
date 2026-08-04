@@ -1,0 +1,13 @@
+{
+  "provider": "fixture",
+  "messageId": "fix-no-deadline",
+  "threadId": "thread-no-deadline",
+  "subject": "Please complete ethics certification",
+  "from": "compliance@accg.org",
+  "to": ["admin@fultoncountyga.gov"],
+  "cc": [],
+  "sentAt": "2026-07-25T10:00:00.000Z",
+  "bodyText": "Hello Fulton County team,\n\nPlease complete and return the annual ethics certification to ACCG as soon as possible. We will confirm once received.\n\nRegards,\nACCG Compliance",
+  "links": [],
+  "attachments": []
+}
