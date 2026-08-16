@@ -73,12 +73,19 @@ function createPgPool(): DbLike {
 }
 
 function createPglitePool(): DbLike {
-  const dataDir =
+  const explicitDir =
     config.databaseUrl.startsWith("pglite:") && config.databaseUrl !== "pglite:"
       ? config.databaseUrl.slice("pglite:".length)
-      : path.resolve(__dirname, "../../data/pglite");
+      : null;
 
-  fs.mkdirSync(path.dirname(dataDir), { recursive: true });
+  // Vercel serverless filesystem is read-only except /tmp
+  const dataDir =
+    explicitDir ||
+    (process.env.VERCEL
+      ? "/tmp/email-task-agent-pglite"
+      : path.resolve(__dirname, "../../data/pglite"));
+
+  fs.mkdirSync(dataDir, { recursive: true });
 
   let dbPromise: Promise<PGlite> | null = null;
   let queue: Promise<unknown> = Promise.resolve();

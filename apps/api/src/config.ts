@@ -20,8 +20,12 @@ export const config = {
   appBaseUrl:
     process.env.APP_BASE_URL ??
     process.env.RENDER_EXTERNAL_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
     "http://localhost:4000",
-  webBaseUrl: process.env.WEB_BASE_URL ?? "http://localhost:5173",
+  webBaseUrl:
+    process.env.WEB_BASE_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
+    "http://localhost:5173",
   sessionSecret: required("SESSION_SECRET", "dev-session-secret-change-me"),
   tokenEncryptionKey: required(
     "TOKEN_ENCRYPTION_KEY",
@@ -61,12 +65,16 @@ export const config = {
       "https://generativelanguage.googleapis.com/v1beta",
   },
   enableFixtureProvider: (process.env.ENABLE_FIXTURE_PROVIDER ?? "true") === "true",
+  // From dist/config.js → apps/api/data/entities.json (included via vercel.json)
   entityCatalogPath:
     process.env.ENTITY_CATALOG_PATH ??
     path.resolve(__dirname, "../data/entities.json"),
+  // Writable path must be under /tmp on Vercel (read-only bundle otherwise)
   entitySyncedPath:
     process.env.ENTITY_SYNCED_PATH ??
-    path.resolve(__dirname, "../data/entities.synced.json"),
+    (process.env.VERCEL
+      ? "/tmp/email-task-agent-entities.synced.json"
+      : path.resolve(__dirname, "../data/entities.synced.json")),
 };
 
 export function gmailConfigured(): boolean {
