@@ -1,6 +1,10 @@
 # Render Blueprint — deploy the API as a long-running Node service.
 # Dashboard: https://dashboard.render.com/select-repo?type=blueprint
 # Frontend stays on Vercel; set VITE_API_BASE_URL there to this service URL.
+#
+# Gmail OAuth / Gemini are optional. Add them later in Render → Environment:
+#   GEMINI_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+#   GOOGLE_REDIRECT_URI=https://<this-service>.onrender.com/api/oauth/gmail/callback
 
 services:
   - type: web
@@ -24,18 +28,9 @@ services:
       - key: ENABLE_FIXTURE_PROVIDER
         value: "true"
       - key: WEB_BASE_URL
-        # Production Vercel frontend
         value: https://email-task-agent-xi.vercel.app
       - key: SESSION_SECRET
         generateValue: true
       - key: TOKEN_ENCRYPTION_KEY
-        generateValue: true
-      # Optional LLM extraction
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_REDIRECT_URI
-        sync: false
+        # Must be 64 hex chars (AES-256). Do not use Render generateValue here.
+        value: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
