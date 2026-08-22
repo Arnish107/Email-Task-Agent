@@ -37,6 +37,35 @@ function AmbientBackground() {
   );
 }
 
+function LandingScreen({ onEnter }: { onEnter: () => void }) {
+  return (
+    <div className="app-root">
+      <AmbientBackground />
+      <div className="landing-wrap">
+        <div className="landing-hero">
+          <div className="logo-mark landing-brand">
+            <span className="logo-dot" />
+            Email Task Agent
+          </div>
+          <h1>
+            Mail in. Tasks out.{" "}
+            <span className="text-gradient">Nothing silent.</span>
+          </h1>
+          <p>
+            Connect a mailbox, scan for compliance actions, and export only what
+            you approve.
+          </p>
+          <div className="landing-actions">
+            <button className="btn btn-lg" type="button" onClick={onEnter}>
+              Enter the app
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -491,17 +520,28 @@ function Dashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function isAuthError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return /authentication required|session expired/i.test(msg);
+  }
+
   useEffect(() => {
-    refresh().catch((err) =>
-      setError(err instanceof Error ? err.message : "Failed to load"),
-    );
+    refresh().catch((err) => {
+      if (isAuthError(err)) {
+        onLogout();
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Failed to load");
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   useEffect(() => {
     const timer = setInterval(() => {
       if (jobs.some((j) => j.status === "queued" || j.status === "running")) {
-        refresh().catch(() => undefined);
+        refresh().catch((err) => {
+          if (isAuthError(err)) onLogout();
+        });
       }
     }, 2500);
     return () => clearInterval(timer);
@@ -523,7 +563,11 @@ function Dashboard({
             className="btn secondary"
             type="button"
             onClick={async () => {
-              await client.logout();
+              try {
+                await client.logout();
+              } catch {
+                // Session may already be gone.
+              }
               onLogout();
             }}
           >
@@ -568,6 +612,11 @@ function Dashboard({
               className="btn"
               type="button"
               disabled={busy || !gmailReady}
+              title={
+                gmailReady
+                  ? "Gmail read-only OAuth"
+                  : "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env, then restart"
+              }
               onClick={async () => {
                 setBusy(true);
                 setError(null);
@@ -575,6 +624,10 @@ function Dashboard({
                   const { url } = await client.startGmailOAuth();
                   window.location.href = url;
                 } catch (err) {
+                  if (isAuthError(err)) {
+                    onLogout();
+                    return;
+                  }
                   setError(err instanceof Error ? err.message : "OAuth failed");
                 } finally {
                   setBusy(false);
@@ -590,7 +643,7 @@ function Dashboard({
               title={
                 microsoftReady
                   ? "Microsoft Graph Mail.Read"
-                  : "Set MICROSOFT_CLIENT_ID/SECRET, or use Any email (IMAP)"
+                  : "Add MICROSOFT_CLIENT_ID/SECRET to .env, or use Any email (IMAP)"
               }
               onClick={async () => {
                 setBusy(true);
@@ -599,6 +652,10 @@ function Dashboard({
                   const { url } = await client.startMicrosoftOAuth();
                   window.location.href = url;
                 } catch (err) {
+                  if (isAuthError(err)) {
+                    onLogout();
+                    return;
+                  }
                   setError(err instanceof Error ? err.message : "OAuth failed");
                 } finally {
                   setBusy(false);
@@ -616,6 +673,16 @@ function Dashboard({
               {showImapForm ? "Hide IMAP form" : "Any email (IMAP)"}
             </button>
           </div>
+
+          {(!gmailReady || !microsoftReady) && (
+            <p className="meta" style={{ margin: 0 }}>
+              {!gmailReady && !microsoftReady
+                ? "Gmail and Outlook OAuth are not configured yet — use Any email (IMAP) with an app password, or Offline sample inbox."
+                : !gmailReady
+                  ? "Gmail OAuth is not configured (missing Google client ID/secret in .env)."
+                  : "Outlook OAuth is not configured (missing Microsoft client ID/secret in .env)."}
+            </p>
+          )}
 
           {showImapForm && (
             <div className="stack panel" style={{ boxShadow: "none" }}>
@@ -702,6 +769,10 @@ function Dashboard({
                     setImapForm({ email: "", password: "", host: "", port: "993" });
                     await refresh();
                   } catch (err) {
+                    if (isAuthError(err)) {
+                      onLogout();
+                      return;
+                    }
                     setError(err instanceof Error ? err.message : "IMAP failed");
                   } finally {
                     setBusy(false);
@@ -1009,9 +1080,14 @@ function Dashboard({
   );
 }
 
+const ENTERED_KEY = "eta_entered_app";
+
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [entered, setEntered] = useState(
+    () => sessionStorage.getItem(ENTERED_KEY) === "1",
+  );
 
   useEffect(() => {
     client
@@ -1035,9 +1111,27 @@ export function App() {
     );
   }
 
+  if (!entered) {
+    return (
+      <LandingScreen
+        onEnter={() => {
+          sessionStorage.setItem(ENTERED_KEY, "1");
+          setEntered(true);
+        }}
+      />
+    );
+  }
+
   if (!user) {
     return <LoginScreen onLogin={setUser} />;
   }
 
-  return <Dashboard user={user} onLogout={() => setUser(null)} />;
+  return (
+    <Dashboard
+      user={user}
+      onLogout={() => {
+        setUser(null);
+      }}
+    />
+  );
 }
