@@ -391,7 +391,6 @@ function Dashboard({
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [gmailReady, setGmailReady] = useState(false);
-  const [microsoftReady, setMicrosoftReady] = useState(false);
   const [selectedMailbox, setSelectedMailbox] = useState("");
   const [days, setDays] = useState(7);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -501,9 +500,6 @@ function Dashboard({
     setGmailReady(
       Boolean(providers.providers.find((p) => p.id === "gmail")?.configured),
     );
-    setMicrosoftReady(
-      Boolean(providers.providers.find((p) => p.id === "microsoft")?.configured),
-    );
     setSelectedMailbox((current) => pickPreferredMailbox(mb.mailboxes, current));
   }
 
@@ -584,7 +580,7 @@ function Dashboard({
             <span className="text-gradient">becomes a task</span>
           </h1>
           <p>
-            Connect Gmail, Outlook, or IMAP. We scan for high-signal compliance
+            Connect Gmail or IMAP. We scan for high-signal compliance
             mail, you approve with evidence, then export JSON.
           </p>
         </div>
@@ -639,34 +635,6 @@ function Dashboard({
             <button
               className="btn secondary"
               type="button"
-              disabled={busy || !microsoftReady}
-              title={
-                microsoftReady
-                  ? "Microsoft Graph Mail.Read"
-                  : "Add MICROSOFT_CLIENT_ID/SECRET to .env, or use Any email (IMAP)"
-              }
-              onClick={async () => {
-                setBusy(true);
-                setError(null);
-                try {
-                  const { url } = await client.startMicrosoftOAuth();
-                  window.location.href = url;
-                } catch (err) {
-                  if (isAuthError(err)) {
-                    onLogout();
-                    return;
-                  }
-                  setError(err instanceof Error ? err.message : "OAuth failed");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              Connect Outlook
-            </button>
-            <button
-              className="btn secondary"
-              type="button"
               disabled={busy}
               onClick={() => setShowImapForm((v) => !v)}
             >
@@ -674,21 +642,18 @@ function Dashboard({
             </button>
           </div>
 
-          {(!gmailReady || !microsoftReady) && (
+          {!gmailReady && (
             <p className="meta" style={{ margin: 0 }}>
-              {!gmailReady && !microsoftReady
-                ? "Gmail and Outlook OAuth are not configured yet — use Any email (IMAP) with an app password, or Offline sample inbox."
-                : !gmailReady
-                  ? "Gmail OAuth is not configured (missing Google client ID/secret in .env)."
-                  : "Outlook OAuth is not configured (missing Microsoft client ID/secret in .env)."}
+              Gmail OAuth is not configured yet — use Any email (IMAP) with an
+              app password, or Offline sample inbox.
             </p>
           )}
 
           {showImapForm && (
             <div className="stack panel" style={{ boxShadow: "none" }}>
               <p className="meta" style={{ margin: 0 }}>
-                Works with Outlook, Yahoo, iCloud, Zoho, custom domains, and
-                Gmail via an app password. Password is encrypted at rest.
+                Works with Yahoo, iCloud, Zoho, custom domains, and Gmail via an
+                app password. Password is encrypted at rest.
               </p>
               <label>
                 Email address
@@ -791,7 +756,7 @@ function Dashboard({
             </div>
           ) : (
             <div className="banner">
-              Connect Gmail, Outlook, or any IMAP mailbox to scan real email.
+              Connect Gmail or any IMAP mailbox to scan real email.
             </div>
           )}
 

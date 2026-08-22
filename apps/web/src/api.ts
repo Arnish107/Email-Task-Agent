@@ -155,8 +155,6 @@ export const client = {
     ),
   startGmailOAuth: () =>
     api<{ url: string }>("/api/mailboxes/oauth/gmail/start"),
-  startMicrosoftOAuth: () =>
-    api<{ url: string }>("/api/mailboxes/oauth/microsoft/start"),
   startScan: (mailboxId: string, days: number) =>
     api<{ jobId: string; query: string }>("/api/scans", {
       method: "POST",

@@ -5,7 +5,6 @@ import { requireAuth } from "../auth/session.js";
 import {
   config,
   gmailConfigured,
-  microsoftConfigured,
 } from "../config.js";
 import { encryptSecret } from "../crypto/tokens.js";
 import { pool } from "../db/pool.js";
@@ -18,10 +17,6 @@ import {
   inferImapSettings,
   verifyImapLogin,
 } from "../providers/imap.js";
-import {
-  exchangeMicrosoftCode,
-  getMicrosoftAuthUrl,
-} from "../providers/microsoft.js";
 
 export const mailboxRouter = Router();
 
@@ -47,17 +42,11 @@ mailboxRouter.get("/providers", async (_req, res) => {
         configured: gmailConfigured(),
       },
       {
-        id: "microsoft",
-        label: "Microsoft / Outlook",
-        scope: "Mail.Read",
-        configured: microsoftConfigured(),
-      },
-      {
         id: "imap",
         label: "Any email (IMAP)",
         scope: "imap",
         configured: true,
-        note: "Works with Outlook, Yahoo, iCloud, Zoho, custom hosts, and Gmail app passwords.",
+        note: "Works with Yahoo, iCloud, Zoho, custom hosts, and Gmail app passwords.",
       },
       {
         id: "fixture",
@@ -216,27 +205,6 @@ mailboxRouter.get("/oauth/gmail/start", async (req, res) => {
   res.json({ url });
 });
 
-mailboxRouter.get("/oauth/microsoft/start", async (req, res) => {
-  if (!microsoftConfigured()) {
-    res.status(400).json({
-      error:
-        "Microsoft OAuth is not configured. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET, or connect via IMAP instead.",
-    });
-    return;
-  }
-
-  const state = nanoid(32);
-  const expires = new Date(Date.now() + 10 * 60 * 1000);
-  await pool.query(
-    `INSERT INTO oauth_states (state, user_id, provider, expires_at)
-     VALUES ($1, $2, 'microsoft', $3)`,
-    [state, req.user!.id, expires],
-  );
-
-  const url = getMicrosoftAuthUrl(state);
-  res.json({ url });
-});
-
 mailboxRouter.delete("/:id", async (req, res) => {
   const result = await pool.query(
     `UPDATE mailbox_connections
@@ -267,7 +235,7 @@ async function finishOAuthCallback(
     redirect: (url: string) => void;
     status: (code: number) => { send: (body: string) => void };
   },
-  provider: "gmail" | "microsoft",
+  provider: "gmail",
 ) {
   const code = String(req.query.code ?? "");
   const state = String(req.query.state ?? "");
@@ -301,10 +269,7 @@ async function finishOAuthCallback(
   }
 
   try {
-    const tokens =
-      provider === "gmail"
-        ? await exchangeGmailCode(code)
-        : await exchangeMicrosoftCode(code);
+    const tokens = await exchangeGmailCode(code);
 
     const existing = await pool.query<{ id: string }>(
       `SELECT id FROM mailbox_connections
@@ -368,10 +333,6 @@ async function finishOAuthCallback(
 
 oauthRouter.get("/gmail/callback", async (req, res) => {
   await finishOAuthCallback(req, res, "gmail");
-});
-
-oauthRouter.get("/microsoft/callback", async (req, res) => {
-  await finishOAuthCallback(req, res, "microsoft");
 });
 
 export function sourceDeepLink(provider: string, messageId: string): string | null {
