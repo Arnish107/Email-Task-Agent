@@ -43,8 +43,20 @@ export async function verifyImapLogin(auth: ImapAuth): Promise<void> {
     auth: { user: auth.user, pass: auth.pass },
     logger: false,
   });
+  const timeoutMs = 25_000;
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            "IMAP connection timed out. For Gmail use an App Password (not your normal password), host imap.gmail.com, port 993.",
+          ),
+        ),
+      timeoutMs,
+    );
+  });
   try {
-    await client.connect();
+    await Promise.race([client.connect(), timeout]);
     await client.logout();
   } finally {
     try {

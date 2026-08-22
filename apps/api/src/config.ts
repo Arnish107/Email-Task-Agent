@@ -14,17 +14,26 @@ function required(name: string, fallback?: string): string {
   return value;
 }
 
+function vercelHttpsOrigin(): string | undefined {
+  const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (prod) return `https://${prod.replace(/^https?:\/\//, "")}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return undefined;
+}
+
+const vercelOrigin = vercelHttpsOrigin();
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   nodeEnv: process.env.NODE_ENV ?? "development",
   appBaseUrl:
     process.env.APP_BASE_URL ??
     process.env.RENDER_EXTERNAL_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
+    vercelOrigin ??
     "http://localhost:4000",
   webBaseUrl:
     process.env.WEB_BASE_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
+    vercelOrigin ??
     "http://localhost:5173",
   sessionSecret: required("SESSION_SECRET", "dev-session-secret-change-me"),
   tokenEncryptionKey: required(
@@ -42,7 +51,7 @@ export const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     redirectUri:
       process.env.GOOGLE_REDIRECT_URI ??
-      "http://localhost:4000/api/oauth/gmail/callback",
+      `${vercelOrigin ?? "http://localhost:4000"}/api/oauth/gmail/callback`,
   },
   microsoft: {
     clientId: process.env.MICROSOFT_CLIENT_ID ?? "",
