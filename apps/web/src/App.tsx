@@ -77,9 +77,16 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
     setError(null);
     try {
       const res = await client.login(email);
-      onLogin(res.user);
+      // Confirm the session cookie stuck before leaving the login screen.
+      // Without this, the dashboard loads briefly then bounces back on 401.
+      const me = await client.me();
+      onLogin(me.user ?? res.user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Login failed — session cookie was not saved. Use http://localhost:5173 (not :4000 or :5174).",
+      );
     } finally {
       setBusy(false);
     }
@@ -524,7 +531,9 @@ function Dashboard({
   useEffect(() => {
     refresh().catch((err) => {
       if (isAuthError(err)) {
-        onLogout();
+        // Confirm session is really gone before bouncing to login (avoids loops).
+        client.me().catch(() => onLogout());
+        setError("Session expired — sign in again.");
         return;
       }
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -536,7 +545,9 @@ function Dashboard({
     const timer = setInterval(() => {
       if (jobs.some((j) => j.status === "queued" || j.status === "running")) {
         refresh().catch((err) => {
-          if (isAuthError(err)) onLogout();
+          if (isAuthError(err)) {
+            client.me().catch(() => onLogout());
+          }
         });
       }
     }, 2500);
@@ -1076,6 +1087,18 @@ export function App() {
     );
   }
 
+  // Already signed in → skip landing and go straight to the dashboard.
+  if (user) {
+    return (
+      <Dashboard
+        user={user}
+        onLogout={() => {
+          setUser(null);
+        }}
+      />
+    );
+  }
+
   if (!entered) {
     return (
       <LandingScreen
@@ -1087,15 +1110,12 @@ export function App() {
     );
   }
 
-  if (!user) {
-    return <LoginScreen onLogin={setUser} />;
-  }
-
   return (
-    <Dashboard
-      user={user}
-      onLogout={() => {
-        setUser(null);
+    <LoginScreen
+      onLogin={(next) => {
+        sessionStorage.setItem(ENTERED_KEY, "1");
+        setEntered(true);
+        setUser(next);
       }}
     />
   );

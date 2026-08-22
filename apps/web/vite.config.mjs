@@ -11,6 +11,8 @@ export default defineConfig({
         // is tried first while the API is only listening on 0.0.0.0.
         target: "http://127.0.0.1:4000",
         changeOrigin: true,
+        // Keep Set-Cookie usable on the Vite origin (no Domain rewrite quirks).
+        cookieDomainRewrite: "",
       },
     },
   },

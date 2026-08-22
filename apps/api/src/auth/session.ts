@@ -7,24 +7,27 @@ import { writeAuditLog } from "../audit/log.js";
 const SESSION_COOKIE = "eta_session";
 const SESSION_DAYS = 14;
 
-/** Cross-origin SPA (e.g. Vercel UI + Render API) needs SameSite=None; Secure.
- * Local Vite proxies /api to the API, so the browser only talks to WEB_BASE_URL —
- * do not treat localhost:5173 vs :4000 as cross-site (Secure cookies break on
- * http://127.0.0.1 and can strand the login UI). */
+/** Session cookies for the SPA.
+ * Local: Vite proxies /api on the same origin (http://localhost:5173), so use
+ * SameSite=Lax and never Secure — Secure cookies are dropped on plain HTTP and
+ * bounce the UI back to the login screen after a "successful" sign-in.
+ * Production split UI/API: SameSite=None; Secure. */
 function sessionCookieOptions(expires?: Date): CookieOptions {
-  const isProd = config.nodeEnv === "production";
+  const appUrl = config.appBaseUrl;
+  const webUrl = config.webBaseUrl;
+  const https =
+    appUrl.startsWith("https://") && webUrl.startsWith("https://");
   let crossSite = false;
   try {
-    const web = new URL(config.webBaseUrl);
-    const app = new URL(config.appBaseUrl);
-    crossSite = isProd && web.origin !== app.origin;
+    crossSite = https && new URL(webUrl).origin !== new URL(appUrl).origin;
   } catch {
     crossSite = false;
   }
   return {
     httpOnly: true,
+    path: "/",
     sameSite: crossSite ? "none" : "lax",
-    secure: crossSite || isProd,
+    secure: crossSite,
     ...(expires ? { expires } : {}),
   };
 }
