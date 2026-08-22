@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { CookieOptions, Request, Response, NextFunction } from "express";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
@@ -38,6 +39,56 @@ export type AuthUser = {
   displayName: string | null;
 };
 
+function b64url(input: Buffer | string): string {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  return buf.toString("base64url");
+}
+
+function signSessionToken(user: AuthUser): string {
+  const exp = Math.floor(Date.now() / 1000) + SESSION_DAYS * 24 * 60 * 60;
+  const payload = b64url(
+    JSON.stringify({
+      uid: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      exp,
+    }),
+  );
+  const sig = b64url(
+    createHmac("sha256", config.sessionSecret).update(payload).digest(),
+  );
+  return `eta1.${payload}.${sig}`;
+}
+
+function verifySessionToken(token: string): AuthUser | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== "eta1") return null;
+  const [, payload, sig] = parts;
+  const expected = b64url(
+    createHmac("sha256", config.sessionSecret).update(payload).digest(),
+  );
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      uid?: string;
+      email?: string;
+      displayName?: string | null;
+      exp?: number;
+    };
+    if (!data.uid || !data.email || !data.exp) return null;
+    if (data.exp * 1000 < Date.now()) return null;
+    return {
+      id: data.uid,
+      email: data.email,
+      displayName: data.displayName ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -61,6 +112,17 @@ export async function requireAuth(
     undefined;
   if (!sessionId) {
     res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  // Signed tokens stay valid across Vercel serverless instances. PGlite on
+  // Vercel is ephemeral, so looking up sessions in the DB after login caused
+  // an immediate bounce back to the sign-in screen.
+  const fromToken = verifySessionToken(sessionId);
+  if (fromToken) {
+    req.user = fromToken;
+    req.sessionId = sessionId;
+    next();
     return;
   }
 
@@ -115,19 +177,23 @@ export async function upsertUser(email: string, displayName?: string): Promise<A
   return { id, email: normalized, displayName: displayName ?? null };
 }
 
-export async function createSession(userId: string, res: Response): Promise<string> {
-  const id = nanoid();
+export async function createSession(user: AuthUser, res: Response): Promise<string> {
+  const token = signSessionToken(user);
   const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  await pool.query(
-    "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)",
-    [id, userId, expires],
-  );
-  res.cookie(SESSION_COOKIE, id, sessionCookieOptions(expires));
-  return id;
+  try {
+    await pool.query(
+      "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)",
+      [nanoid(), user.id, expires],
+    );
+  } catch {
+    // Ephemeral PGlite on Vercel may not persist this — the signed token is enough.
+  }
+  res.cookie(SESSION_COOKIE, token, sessionCookieOptions(expires));
+  return token;
 }
 
 export async function destroySession(req: Request, res: Response): Promise<void> {
-  if (req.sessionId) {
+  if (req.sessionId && !req.sessionId.startsWith("eta1.")) {
     await pool.query("DELETE FROM sessions WHERE id = $1", [req.sessionId]);
   }
   res.clearCookie(SESSION_COOKIE, sessionCookieOptions());
@@ -140,7 +206,7 @@ export async function demoSignIn(
   res: Response,
 ): Promise<{ user: AuthUser; sessionId: string }> {
   const user = await upsertUser(email);
-  const sessionId = await createSession(user.id, res);
+  const sessionId = await createSession(user, res);
   await writeAuditLog({
     userId: user.id,
     eventType: "user_signed_in",

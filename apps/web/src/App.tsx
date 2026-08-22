@@ -525,11 +525,6 @@ function Dashboard({
 
   useEffect(() => {
     refresh().catch((err) => {
-      if (isAuthError(err)) {
-        setStoredSessionId(null);
-        onLogout();
-        return;
-      }
       setError(err instanceof Error ? err.message : "Failed to load");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -539,10 +534,7 @@ function Dashboard({
     const timer = setInterval(() => {
       if (jobs.some((j) => j.status === "queued" || j.status === "running")) {
         refresh().catch((err) => {
-          if (isAuthError(err)) {
-            setStoredSessionId(null);
-            onLogout();
-          }
+          setError(err instanceof Error ? err.message : "Failed to load");
         });
       }
     }, 2500);
