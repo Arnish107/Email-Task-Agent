@@ -38,6 +38,11 @@ export function createApp() {
     });
   });
 
+  // Root is not the SPA — send people to the Vite app in local/dev.
+  app.get("/", (_req, res) => {
+    res.redirect(302, config.webBaseUrl);
+  });
+
   app.use("/api/auth", authRouter);
   app.use("/api/mailboxes", requireAuth, mailboxRouter);
   app.use("/api/oauth", oauthRouter);

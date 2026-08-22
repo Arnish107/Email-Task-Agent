@@ -68,19 +68,42 @@ function apiUrl(path: string): string {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`);
+  const controller = new AbortController();
+  const timeoutMs = 15_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (init?.signal) {
+    if (init.signal.aborted) controller.abort();
+    else {
+      init.signal.addEventListener("abort", () => controller.abort(), {
+        once: true,
+      });
+    }
   }
-  return data as T;
+  try {
+    const res = await fetch(apiUrl(path), {
+      credentials: "include",
+      ...init,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        (data as { error?: string }).error || `Request failed (${res.status})`,
+      );
+    }
+    return data as T;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Request timed out — is the API running on port 4000?");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export type ProviderInfo = {

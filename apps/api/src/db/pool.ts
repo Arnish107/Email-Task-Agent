@@ -92,12 +92,10 @@ function createPglitePool(): DbLike {
 
   const getDb = () => {
     if (!dbPromise) {
-      // PGlite defaults to a 128 MiB WebAssembly heap. On Render's 512 MiB
-      // free instance, first-run initialization briefly creates a second
-      // PGlite instance as well, which can push the service over its limit.
-      // Start smaller and allow the heap to grow only when the database needs
-      // it; the email-task dataset is small at boot.
-      dbPromise = PGlite.create({ dataDir, initialMemory: 32 * 1024 * 1024 });
+      // PGlite's WASM module requires at least 2048 pages (128 MiB). Smaller
+      // heaps fail at instantiate time with "memory import has N pages which
+      // is smaller than the declared initial of 2048".
+      dbPromise = PGlite.create({ dataDir, initialMemory: 128 * 1024 * 1024 });
     }
     return dbPromise;
   };
