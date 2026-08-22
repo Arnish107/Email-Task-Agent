@@ -52,7 +52,13 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  const sessionId = req.cookies?.[SESSION_COOKIE] as string | undefined;
+  // Prefer explicit header (survives Vite proxy / localhost cookie quirks),
+  // then fall back to the HttpOnly cookie.
+  const headerSession = String(req.headers["x-eta-session"] ?? "").trim();
+  const sessionId =
+    headerSession ||
+    (req.cookies?.[SESSION_COOKIE] as string | undefined) ||
+    undefined;
   if (!sessionId) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -109,7 +115,7 @@ export async function upsertUser(email: string, displayName?: string): Promise<A
   return { id, email: normalized, displayName: displayName ?? null };
 }
 
-export async function createSession(userId: string, res: Response): Promise<void> {
+export async function createSession(userId: string, res: Response): Promise<string> {
   const id = nanoid();
   const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   await pool.query(
@@ -117,6 +123,7 @@ export async function createSession(userId: string, res: Response): Promise<void
     [id, userId, expires],
   );
   res.cookie(SESSION_COOKIE, id, sessionCookieOptions(expires));
+  return id;
 }
 
 export async function destroySession(req: Request, res: Response): Promise<void> {
@@ -128,13 +135,16 @@ export async function destroySession(req: Request, res: Response): Promise<void>
 
 export { SESSION_COOKIE };
 
-export async function demoSignIn(email: string, res: Response): Promise<AuthUser> {
+export async function demoSignIn(
+  email: string,
+  res: Response,
+): Promise<{ user: AuthUser; sessionId: string }> {
   const user = await upsertUser(email);
-  await createSession(user.id, res);
+  const sessionId = await createSession(user.id, res);
   await writeAuditLog({
     userId: user.id,
     eventType: "user_signed_in",
     details: { method: "demo" },
   });
-  return user;
+  return { user, sessionId };
 }

@@ -61,6 +61,24 @@ export type Entity = {
 
 /** Production API origin (no trailing slash). Empty in local Vite proxy mode. */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const SESSION_KEY = "eta_session_id";
+
+export function getStoredSessionId(): string | null {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredSessionId(sessionId: string | null): void {
+  try {
+    if (sessionId) localStorage.setItem(SESSION_KEY, sessionId);
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ignore private-mode / blocked storage
+  }
+}
 
 function apiUrl(path: string): string {
   if (!API_BASE) return path;
@@ -79,6 +97,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
       });
     }
   }
+  const sessionId = getStoredSessionId();
   try {
     const res = await fetch(apiUrl(path), {
       credentials: "include",
@@ -86,11 +105,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
+        ...(sessionId ? { "X-Eta-Session": sessionId } : {}),
         ...(init?.headers ?? {}),
       },
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) {
+        setStoredSessionId(null);
+      }
       throw new Error(
         (data as { error?: string }).error || `Request failed (${res.status})`,
       );
@@ -116,12 +139,21 @@ export type ProviderInfo = {
 
 export const client = {
   me: () => api<{ user: User }>("/api/auth/me"),
-  login: (email: string) =>
-    api<{ user: User }>("/api/auth/login", {
+  login: async (email: string) => {
+    const res = await api<{ user: User; sessionId: string }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email }),
-    }),
-  logout: () => api<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+    });
+    if (res.sessionId) setStoredSessionId(res.sessionId);
+    return res;
+  },
+  logout: async () => {
+    try {
+      await api<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+    } finally {
+      setStoredSessionId(null);
+    }
+  },
   mailboxes: () => api<{ mailboxes: Mailbox[] }>("/api/mailboxes"),
   providers: () =>
     api<{ providers: ProviderInfo[] }>("/api/mailboxes/providers"),

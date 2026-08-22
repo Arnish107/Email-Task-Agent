@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   client,
+  setStoredSessionId,
   type Candidate,
   type Entity,
   type Mailbox,
@@ -77,16 +78,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
     setError(null);
     try {
       const res = await client.login(email);
-      // Confirm the session cookie stuck before leaving the login screen.
-      // Without this, the dashboard loads briefly then bounces back on 401.
-      const me = await client.me();
-      onLogin(me.user ?? res.user);
+      onLogin(res.user);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Login failed — session cookie was not saved. Use http://localhost:5173 (not :4000 or :5174).",
-      );
+      setStoredSessionId(null);
+      setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setBusy(false);
     }
@@ -531,9 +526,8 @@ function Dashboard({
   useEffect(() => {
     refresh().catch((err) => {
       if (isAuthError(err)) {
-        // Confirm session is really gone before bouncing to login (avoids loops).
-        client.me().catch(() => onLogout());
-        setError("Session expired — sign in again.");
+        setStoredSessionId(null);
+        onLogout();
         return;
       }
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -546,7 +540,8 @@ function Dashboard({
       if (jobs.some((j) => j.status === "queued" || j.status === "running")) {
         refresh().catch((err) => {
           if (isAuthError(err)) {
-            client.me().catch(() => onLogout());
+            setStoredSessionId(null);
+            onLogout();
           }
         });
       }
@@ -573,7 +568,7 @@ function Dashboard({
               try {
                 await client.logout();
               } catch {
-                // Session may already be gone.
+                setStoredSessionId(null);
               }
               onLogout();
             }}

@@ -18,8 +18,8 @@ authRouter.post("/login", async (req, res) => {
     res.status(400).json({ error: "Valid email required" });
     return;
   }
-  const user = await demoSignIn(email, res);
-  res.json({ user });
+  const { user, sessionId } = await demoSignIn(email, res);
+  res.json({ user, sessionId });
 });
 
 authRouter.post("/logout", requireAuth, async (req, res) => {

@@ -19,6 +19,7 @@ export function createApp() {
     cors({
       origin: config.webBaseUrl,
       credentials: true,
+      allowedHeaders: ["Content-Type", "X-Eta-Session"],
     }),
   );
   // Skip stream parsing when the platform already attached a body (Vercel).
