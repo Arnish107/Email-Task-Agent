@@ -760,6 +760,57 @@ textarea {
   }
 }
 
+.login-footnote {
+  margin: 0;
+  text-align: center;
+}
+
+/* Landing */
+.landing-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
+  position: relative;
+  z-index: 2;
+}
+
+.landing-hero {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 18px;
+  justify-items: start;
+  animation: rise 0.65s ease both;
+}
+
+.landing-brand {
+  font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+  margin-bottom: 8px;
+  animation: rise 0.55s ease both;
+}
+
+.landing-hero h1 {
+  font-size: clamp(2.6rem, 7vw, 4.4rem);
+  line-height: 1.05;
+  max-width: 14ch;
+  animation: rise 0.7s ease 0.05s both;
+}
+
+.landing-hero > p {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: clamp(1.05rem, 2vw, 1.2rem);
+  max-width: 34rem;
+  animation: rise 0.7s ease 0.12s both;
+}
+
+.landing-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  animation: rise 0.75s ease 0.18s both;
+}
+
 @media (hover: none), (pointer: coarse) {
   .hover-glow:hover {
     transform: none;
