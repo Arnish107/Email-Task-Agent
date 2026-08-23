@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { writeAuditLog } from "../audit/log.js";
 import { pool } from "../db/pool.js";
 import { buildImportantGmailQuery } from "../extraction/importance.js";
-import { enqueueScanJob } from "../jobs/scanWorker.js";
+import { enqueueScanJob, runScanJob } from "../jobs/scanWorker.js";
 
 export const scansRouter = Router();
 
@@ -25,7 +25,10 @@ scansRouter.post("/", async (req, res) => {
 
   const mailbox = await assertMailboxOwned(mailboxId, req.user!.id);
   if (!mailbox || mailbox.status !== "active") {
-    res.status(404).json({ error: "Active mailbox not found" });
+    res.status(404).json({
+      error:
+        "Active mailbox not found. On Vercel the database resets between requests unless you set a real Postgres DATABASE_URL — reconnect Gmail, then scan again. Or use Offline sample inbox for a demo.",
+    });
     return;
   }
 
@@ -54,7 +57,13 @@ scansRouter.post("/", async (req, res) => {
     details: { jobId: id, query, days, importantOnly: true },
   });
 
-  enqueueScanJob(id);
+  if (process.env.VERCEL) {
+    // Must finish inside this invocation — background queues do not survive.
+    await runScanJob(id);
+  } else {
+    enqueueScanJob(id);
+  }
+
   res.status(201).json({
     jobId: id,
     query,

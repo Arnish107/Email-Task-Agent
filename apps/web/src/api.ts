@@ -213,10 +213,14 @@ export const client = {
   startGmailOAuth: () =>
     api<{ url: string }>("/api/mailboxes/oauth/gmail/start", undefined, 60_000),
   startScan: (mailboxId: string, days: number) =>
-    api<{ jobId: string; query: string }>("/api/scans", {
-      method: "POST",
-      body: JSON.stringify({ mailboxId, days }),
-    }),
+    api<{ jobId: string; query: string }>(
+      "/api/scans",
+      {
+        method: "POST",
+        body: JSON.stringify({ mailboxId, days }),
+      },
+      55_000,
+    ),
   scans: () => api<{ jobs: ScanJob[] }>("/api/scans"),
   candidates: (status?: string) =>
     api<{ candidates: Candidate[] }>(

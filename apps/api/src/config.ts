@@ -40,11 +40,22 @@ export const config = {
     "TOKEN_ENCRYPTION_KEY",
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   ),
-  databaseUrl: required("DATABASE_URL", "pglite"),
-  usePglite:
-    (process.env.USE_PGLITE ?? "true") === "true" ||
-    (process.env.DATABASE_URL ?? "pglite") === "pglite" ||
-    (process.env.DATABASE_URL ?? "").startsWith("pglite:"),
+  databaseUrl: required(
+    "DATABASE_URL",
+    process.env.POSTGRES_URL ??
+      process.env.POSTGRES_PRISMA_URL ??
+      "pglite",
+  ),
+  usePglite: (() => {
+    const url =
+      process.env.DATABASE_URL ??
+      process.env.POSTGRES_URL ??
+      process.env.POSTGRES_PRISMA_URL ??
+      "pglite";
+    if ((process.env.USE_PGLITE ?? "") === "true") return true;
+    if ((process.env.USE_PGLITE ?? "") === "false") return false;
+    return url === "pglite" || url.startsWith("pglite:");
+  })(),
   demoAuthEnabled: (process.env.DEMO_AUTH_ENABLED ?? "true") === "true",
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID ?? "",

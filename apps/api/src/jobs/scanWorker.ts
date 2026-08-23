@@ -313,9 +313,20 @@ async function failJob(
 }
 
 export function enqueueScanJob(jobId: string): void {
+  // Fire-and-forget only works on a long-lived Node process (local / Render).
+  // On Vercel, setImmediate is frozen when the response ends — caller must await
+  // runScanJob() instead.
+  if (process.env.VERCEL) {
+    return;
+  }
   setImmediate(() => {
     processScanJob(jobId).catch((err) => {
       console.error("Scan job crashed", jobId, err);
     });
   });
+}
+
+/** Run a scan to completion (required on Vercel serverless). */
+export async function runScanJob(jobId: string): Promise<void> {
+  await processScanJob(jobId);
 }
