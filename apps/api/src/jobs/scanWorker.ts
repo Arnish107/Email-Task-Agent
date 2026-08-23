@@ -9,6 +9,7 @@ import {
   isImportantEmail,
   MAX_SCAN_MESSAGES,
   parseSelectivity,
+  synthesizeRelaxedCandidate,
   type Selectivity,
 } from "../extraction/importance.js";
 import { pool } from "../db/pool.js";
@@ -144,9 +145,15 @@ export async function processScanJob(jobId: string): Promise<void> {
 
     let candidatesCreated = 0;
     let messagesProcessed = 0;
+    let skippedFilter = 0;
+    let emptyExtraction = 0;
     const startedAt = Date.now();
     // Leave headroom before Vercel maxDuration so we can still write completion.
+    // Cap LLM work so Catch more finishes with some results instead of timing out empty.
     const deadlineMs = process.env.VERCEL ? 240_000 : 10 * 60_000;
+    const maxExtract =
+      selectivity === "relaxed" ? 80 : selectivity === "balanced" ? 120 : 200;
+    let extractedCount = 0;
 
     const existingRes = await pool.query<{
       id: string;
@@ -166,17 +173,33 @@ export async function processScanJob(jobId: string): Promise<void> {
       if (Date.now() - startedAt > deadlineMs) {
         break;
       }
+      if (extractedCount >= maxExtract) {
+        break;
+      }
       messagesProcessed += 1;
       const email = await provider.fetchMessage(accessToken, messageId, meta);
       if (!isImportantEmail(email, selectivity)) {
+        skippedFilter += 1;
         continue;
       }
 
       const hash = bodyHash(email.bodyText);
-      const extraction = await extractTasks(email, selectivity);
+      extractedCount += 1;
+      let extraction = await extractTasks(email, selectivity);
 
       if (!extraction.containsTask || extraction.candidates.length === 0) {
-        continue;
+        if (selectivity === "relaxed") {
+          const synth = synthesizeRelaxedCandidate(email);
+          if (synth) {
+            extraction = { containsTask: true, candidates: [synth] };
+          } else {
+            emptyExtraction += 1;
+            continue;
+          }
+        } else {
+          emptyExtraction += 1;
+          continue;
+        }
       }
 
       for (const candidate of extraction.candidates) {
@@ -298,9 +321,13 @@ export async function processScanJob(jobId: string): Promise<void> {
         jobId,
         messagesListed: messageIds.length,
         messagesSeen: messagesProcessed,
+        extractedCount,
+        skippedFilter,
+        emptyExtraction,
         candidatesCreated,
         selectivity,
         cappedAt: MAX_SCAN_MESSAGES,
+        maxExtract,
         timedOutEarly: messagesProcessed < messageIds.length,
       },
     });

@@ -327,6 +327,62 @@ a {
   align-items: center;
 }
 
+.selectivity-block {
+  display: grid;
+  gap: 10px;
+}
+
+.selectivity-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted-strong);
+}
+
+.selectivity-options {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 820px) {
+  .selectivity-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+.selectivity-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.selectivity-card strong {
+  font-size: 0.98rem;
+}
+
+.selectivity-card span {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.selectivity-card:hover {
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.selectivity-card.selected {
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(14, 116, 144, 0.22);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25);
+}
+
 .topbar-actions {
   flex-shrink: 0;
 }

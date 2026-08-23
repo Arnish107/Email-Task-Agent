@@ -16,17 +16,18 @@ export function parseSelectivity(value: unknown): Selectivity {
     .trim()
     .toLowerCase();
   if (v === "relaxed" || v === "balanced" || v === "strict") return v;
-  return "balanced";
+  return "relaxed";
 }
 
-const NOISE =
-  /unsubscribe|newsletter|weekly digest|view in browser|you('re| are) receiving this|% off|limited time offer|flash sale/i;
+/** Subject/from look like marketing — ignore common footer “unsubscribe” alone. */
+const MARKETING_SUBJECT =
+  /\b(newsletter|digest|% off|sale|promo|deal of the day|weekly roundup|flash sale)\b/i;
 
-const NOISE_STRICT =
-  /unsubscribe|newsletter|weekly digest|view in browser|you('re| are) receiving this|no[- ]reply@|donotreply|do-not-reply|password reset|verify your email|security alert|new login|linkedin|facebook|twitter|instagram|spotify|amazon\.com|package delivered|your order|receipt for|promotional|marketing|sale ends|% off|limited time offer|flash sale|fyi only|for your information only|no action (needed|required)/i;
+const NOISE_BODY_STRONG =
+  /you('re| are) receiving this (email )?because|view (this|in) browser|manage preferences|weekly digest/i;
 
 const HIGH_SIGNAL =
-  /\b(action required|immediate action|deadline|due (by|date|on)|no later than|must submit|please submit|please complete|please sign|please return|please upload|required to|compliance|certification|filing|grant|audit|reporting|form [a-z0-9-]+|portal|invoice|payment|meeting|rsvp|confirm|respond|reply by)\b/i;
+  /\b(action required|immediate action|deadline|due (by|date|on)|no later than|must submit|please submit|please complete|please sign|please return|please upload|required to|compliance|certification|filing|grant|audit|reporting|form [a-z0-9-]+|portal|invoice|payment|meeting|rsvp|confirm|respond|reply by|please review|follow up|can you|could you|need you to)\b/i;
 
 const DEADLINEish =
   /\b(due|deadline|by|no later than|before)\b.{0,40}\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?|[A-Z][a-z]+ \d{1,2}(,?\s*\d{4})?)\b/i;
@@ -37,20 +38,40 @@ export type ImportanceResult = {
   reasons: string[];
 };
 
+function looksLikeMarketing(email: NormalizedEmail): boolean {
+  const subject = email.subject ?? "";
+  const from = email.from ?? "";
+  const head = email.bodyText.slice(0, 400);
+  if (MARKETING_SUBJECT.test(subject)) return true;
+  if (NOISE_BODY_STRONG.test(head) && !HIGH_SIGNAL.test(subject)) return true;
+  if (
+    /noreply|no-reply|donotreply|marketing@|news@|promo@/i.test(from) &&
+    !HIGH_SIGNAL.test(subject) &&
+    !DEADLINEish.test(`${subject}\n${head}`)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Prefilter before LLM extraction. Behavior depends on selectivity.
  */
 export function scoreEmailImportance(
   email: NormalizedEmail,
-  selectivity: Selectivity = "balanced",
+  selectivity: Selectivity = "relaxed",
 ): ImportanceResult {
   const subject = email.subject ?? "";
   const blob = `${subject}\n${email.from}\n${email.bodyText.slice(0, 2500)}`;
   const reasons: string[] = [];
   let score = 0;
 
-  const noiseRe = selectivity === "strict" ? NOISE_STRICT : NOISE;
-  if (noiseRe.test(blob) && !HIGH_SIGNAL.test(subject) && !DEADLINEish.test(blob)) {
+  // Catch more: never drop on prefilter — LLM / candidate gate decide.
+  if (selectivity === "relaxed") {
+    return { important: true, score: 1, reasons: ["catch_more"] };
+  }
+
+  if (looksLikeMarketing(email) && !HIGH_SIGNAL.test(subject) && !DEADLINEish.test(blob)) {
     return { important: false, score: 0, reasons: ["noise_or_marketing"] };
   }
 
@@ -63,28 +84,26 @@ export function scoreEmailImportance(
     reasons.push("deadline_language");
   }
 
-  if (selectivity === "relaxed") {
-    reasons.push("inbox_mail");
-    return { important: true, score: Math.max(1, score), reasons };
-  }
-
   if (selectivity === "balanced") {
-    // Process unless clear noise; prefer messages with some signal but don't require it.
     reasons.push(score > 0 ? "signal_or_inbox" : "inbox_mail");
     return { important: true, score: Math.max(1, score), reasons };
   }
 
-  // strict: need clear action / deadline language
+  // strict
   const important = score >= 2;
   if (!important) {
-    return { important: false, score, reasons: reasons.length ? reasons : ["low_signal"] };
+    return {
+      important: false,
+      score,
+      reasons: reasons.length ? reasons : ["low_signal"],
+    };
   }
   return { important: true, score, reasons };
 }
 
 export function isImportantEmail(
   email: NormalizedEmail,
-  selectivity: Selectivity = "balanced",
+  selectivity: Selectivity = "relaxed",
 ): boolean {
   return scoreEmailImportance(email, selectivity).important;
 }
@@ -94,15 +113,16 @@ export function isImportantEmail(
  */
 export function buildImportantGmailQuery(
   days: number,
-  selectivity: Selectivity = "balanced",
+  selectivity: Selectivity = "relaxed",
 ): string {
   const window = `newer_than:${Math.min(90, Math.max(1, days))}d`;
-  const exclude = `-category:promotions -category:social -category:forums -in:chats`;
 
   if (selectivity === "relaxed") {
-    return `${window} ${exclude}`;
+    // Broadest: all recent mail (including promotions).
+    return window;
   }
 
+  const exclude = `-category:promotions -category:social -category:forums -in:chats`;
   if (selectivity === "balanced") {
     return `${window} ${exclude}`;
   }
@@ -123,6 +143,7 @@ export function buildImportantGmailQuery(
     "portal",
     "invoice",
     "RSVP",
+    "please",
   ].join(" OR ");
 
   return `${window} (${signals}) ${exclude}`;
@@ -137,31 +158,31 @@ export function isImportantCandidate(
     title: string;
     missingFields?: string[];
   },
-  selectivity: Selectivity = "balanced",
+  selectivity: Selectivity = "relaxed",
 ): boolean {
   const title = candidate.title?.trim() ?? "";
   if (title.length < 3) return false;
   if (/^(untitled|n\/a|none|test)$/i.test(title)) return false;
 
   if (selectivity === "relaxed") {
-    return candidate.confidence >= 0.3 || title.length >= 8;
+    return true;
   }
 
   if (selectivity === "balanced") {
-    if (candidate.confidence >= 0.45) return true;
-    if (candidate.deadline && candidate.confidence >= 0.35) return true;
-    if (candidate.submittedTo && candidate.confidence >= 0.4) return true;
-    return false;
+    if (candidate.confidence >= 0.4) return true;
+    if (candidate.deadline) return true;
+    if (candidate.submittedTo && candidate.confidence >= 0.35) return true;
+    return title.length >= 12;
   }
 
   // strict
-  if (candidate.confidence >= 0.7) return true;
-  if (candidate.deadline && candidate.submittedTo && candidate.confidence >= 0.55) {
+  if (candidate.confidence >= 0.65) return true;
+  if (candidate.deadline && candidate.submittedTo && candidate.confidence >= 0.5) {
     return true;
   }
   if (
     candidate.deadline &&
-    candidate.confidence >= 0.6 &&
+    candidate.confidence >= 0.55 &&
     /\b(submit|file|complete|sign|upload|return|certif|report|pay|respond|confirm)\b/i.test(
       title,
     )
@@ -169,4 +190,60 @@ export function isImportantCandidate(
     return true;
   }
   return false;
+}
+
+/**
+ * When the model finds nothing, invent a reviewable guess from the subject
+ * so Catch more scans are not empty.
+ */
+export function synthesizeRelaxedCandidate(email: NormalizedEmail): {
+  title: string;
+  description: string;
+  deadline: string | null;
+  submittedTo: string | null;
+  portalLink: string | null;
+  priority: "low" | "medium" | "high";
+  entityHint: string | null;
+  assignedRoleHints: string[];
+  confidence: number;
+  evidence: Array<{ quote: string; reason: string }>;
+  missingFields: string[];
+} | null {
+  const title =
+    (email.subject ?? "").replace(/^(re:|fw:|fwd:)\s*/i, "").trim() ||
+    "Review this email";
+  if (title.length < 3) return null;
+  if (looksLikeMarketing(email) && !HIGH_SIGNAL.test(title)) return null;
+
+  const blob = `${email.subject}\n${email.bodyText.slice(0, 500)}`;
+  const softAsk =
+    HIGH_SIGNAL.test(blob) ||
+    DEADLINEish.test(blob) ||
+    /\b(please|can you|could you|need|request|meeting|call|asap|urgent|follow[- ]?up)\b/i.test(
+      blob,
+    );
+
+  // Prefer soft asks; still keep a thin subject-based candidate for Catch more.
+  const confidence = softAsk ? 0.42 : 0.32;
+
+  return {
+    title: title.slice(0, 160),
+    description: (email.bodyText || title).slice(0, 600),
+    deadline: null,
+    submittedTo: email.from || null,
+    portalLink: email.links[0] ?? null,
+    priority: /urgent|asap|immediate/i.test(blob) ? "high" : "medium",
+    entityHint: null,
+    assignedRoleHints: [],
+    confidence,
+    evidence: [
+      {
+        quote: (email.bodyText || title).replace(/\s+/g, " ").trim().slice(0, 180),
+        reason: softAsk
+          ? "Possible ask detected — review and approve or ignore"
+          : "Catch-more scan: subject kept for human review",
+      },
+    ],
+    missingFields: ["deadline"],
+  };
 }

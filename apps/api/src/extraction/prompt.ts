@@ -24,7 +24,9 @@ Do not create tasks for:
 - shipping / package notifications
 - social network digests
 
-Include candidates with confidence >= 0.3. If the email has a clear ask, return at least one candidate.`,
+Include candidates with confidence >= 0.25.
+When unsure whether something is a task, still return one candidate titled from the subject so a human can review it.
+Prefer containsTask true over empty results.`,
 
   balanced: `You extract actionable tasks from emails.
 

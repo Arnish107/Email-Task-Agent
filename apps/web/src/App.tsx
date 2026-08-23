@@ -394,10 +394,10 @@ function Dashboard({
   const [entities, setEntities] = useState<Entity[]>([]);
   const [gmailReady, setGmailReady] = useState(false);
   const [selectedMailbox, setSelectedMailbox] = useState("");
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState(30);
   const [selectivity, setSelectivity] = useState<
     "relaxed" | "balanced" | "strict"
-  >("balanced");
+  >("relaxed");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState("needs_review");
   const [message, setMessage] = useState<string | null>(null);
@@ -874,29 +874,54 @@ function Dashboard({
                 onChange={(e) => setDays(Number(e.target.value))}
               />
             </label>
-            <label style={{ flex: 1, maxWidth: 280 }}>
-              Selectivity
-              <select
-                value={selectivity}
-                onChange={(e) =>
-                  setSelectivity(
-                    e.target.value as "relaxed" | "balanced" | "strict",
-                  )
-                }
-              >
-                <option value="relaxed">Relaxed — catch more</option>
-                <option value="balanced">Balanced — default</option>
-                <option value="strict">Strict — high-signal only</option>
-              </select>
-            </label>
           </div>
-          <p className="meta" style={{ margin: 0 }}>
-            {selectivity === "relaxed"
-              ? "Processes most inbox mail and keeps weaker task guesses. Best if you got 0 candidates before."
-              : selectivity === "strict"
-                ? "Only deadlines / action-required style mail, and high-confidence tasks."
-                : "Skips promotions and obvious noise; keeps clear asks and likely deadlines."}
-          </p>
+
+          <div className="selectivity-block">
+            <div className="selectivity-label">How picky should this scan be?</div>
+            <div className="selectivity-options" role="radiogroup" aria-label="Scan selectivity">
+              {(
+                [
+                  {
+                    id: "relaxed" as const,
+                    title: "Catch more",
+                    blurb: "Best if you keep getting 0. Keeps most mail for review.",
+                  },
+                  {
+                    id: "balanced" as const,
+                    title: "Balanced",
+                    blurb: "Clear asks and deadlines; skips obvious junk.",
+                  },
+                  {
+                    id: "strict" as const,
+                    title: "High signal only",
+                    blurb: "Only strong action-required / deadline mail.",
+                  },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectivity === opt.id}
+                  className={
+                    selectivity === opt.id
+                      ? "selectivity-card selected"
+                      : "selectivity-card"
+                  }
+                  onClick={() => setSelectivity(opt.id)}
+                >
+                  <strong>{opt.title}</strong>
+                  <span>{opt.blurb}</span>
+                </button>
+              ))}
+            </div>
+            {selectivity === "relaxed" && (
+              <p className="meta" style={{ margin: 0 }}>
+                Recommended: you may see extra candidates to ignore — better than
+                zero.
+              </p>
+            )}
+          </div>
 
           <button
             className="btn"
@@ -913,8 +938,14 @@ function Dashboard({
               setError(null);
               try {
                 await client.startScan(selectedMailbox, days, selectivity);
+                const label =
+                  selectivity === "relaxed"
+                    ? "Catch more"
+                    : selectivity === "strict"
+                      ? "High signal only"
+                      : "Balanced";
                 setMessage(
-                  `Scan started for the last ${days} day(s) (${selectivity} selectivity).`,
+                  `Scan started for the last ${days} day(s) — ${label}.`,
                 );
                 await refresh();
               } catch (err) {
@@ -950,7 +981,13 @@ function Dashboard({
                         <div className="meta">{j.error_message}</div>
                       )}
                     </td>
-                    <td>{j.selectivity ?? "balanced"}</td>
+                    <td>
+                      {j.selectivity === "relaxed"
+                        ? "Catch more"
+                        : j.selectivity === "strict"
+                          ? "High signal"
+                          : j.selectivity ?? "Catch more"}
+                    </td>
                     <td>{j.messages_seen}</td>
                     <td>{j.candidates_created}</td>
                     <td>{fmtDate(j.created_at)}</td>
