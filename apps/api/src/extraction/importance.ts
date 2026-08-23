@@ -1,16 +1,13 @@
 import type { NormalizedEmail } from "../providers/types.js";
 
-const NOISE =
-  /unsubscribe|newsletter|weekly digest|view in browser|you('re| are) receiving this|no[- ]reply@|donotreply|do-not-reply|password reset|verify your email|security alert|new login|linkedin|facebook|twitter|instagram|spotify|amazon\.com|package delivered|your order|receipt for|promotional|marketing|sale ends|% off/i;
+/** Hard cap on messages listed/processed per scan. */
+export const MAX_SCAN_MESSAGES = 10_000;
 
-const FYI_ONLY =
-  /\bfyi\b|for your information only|no action (needed|required)|informational only|just sharing|fyi only/i;
+const NOISE =
+  /unsubscribe|newsletter|weekly digest|view in browser|you('re| are) receiving this|% off|limited time offer|flash sale/i;
 
 const HIGH_SIGNAL =
-  /\b(action required|immediate action|deadline|due (by|date|on)|no later than|must submit|please submit|please complete|please sign|please return|please upload|required to|compliance|certification|filing|grant award|audit|subrecipient|cdbg|arpa|reporting requirement|form [a-z0-9-]+|portal)\b/i;
-
-const GOV_OR_AGENCY =
-  /\.gov\b|dca\.|accg|hud\.gov|fema\.|epa\.gov|usda\.|georgia\.gov|state\.[a-z]{2}\.us|county|city of|authority/i;
+  /\b(action required|immediate action|deadline|due (by|date|on)|no later than|must submit|please submit|please complete|please sign|please return|please upload|required to|compliance|certification|filing|grant|audit|reporting|form [a-z0-9-]+|portal|invoice|payment|meeting|rsvp|confirm|respond|reply by)\b/i;
 
 const DEADLINEish =
   /\b(due|deadline|by|no later than|before)\b.{0,40}\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?|[A-Z][a-z]+ \d{1,2}(,?\s*\d{4})?)\b/i;
@@ -22,55 +19,30 @@ export type ImportanceResult = {
 };
 
 /**
- * Cheap prefilter so we do not run extraction on every inbox message.
- * Tuned for government / compliance action mail, not general inbox triage.
+ * Light prefilter — only drops obvious marketing noise.
+ * Extraction decides what becomes a candidate.
  */
 export function scoreEmailImportance(email: NormalizedEmail): ImportanceResult {
   const subject = email.subject ?? "";
   const blob = `${subject}\n${email.from}\n${email.bodyText.slice(0, 2500)}`;
   const reasons: string[] = [];
-  let score = 0;
+  let score = 1; // default: process the message
 
-  if (NOISE.test(blob) && !HIGH_SIGNAL.test(subject)) {
+  if (NOISE.test(blob) && !HIGH_SIGNAL.test(subject) && !DEADLINEish.test(blob)) {
     return { important: false, score: 0, reasons: ["noise_or_marketing"] };
   }
-  if (FYI_ONLY.test(blob) && !HIGH_SIGNAL.test(blob)) {
-    return { important: false, score: 0, reasons: ["fyi_only"] };
-  }
 
-  if (HIGH_SIGNAL.test(subject)) {
-    score += 3;
-    reasons.push("action_subject");
-  } else if (HIGH_SIGNAL.test(blob)) {
+  if (HIGH_SIGNAL.test(subject) || HIGH_SIGNAL.test(blob)) {
     score += 2;
-    reasons.push("action_body");
+    reasons.push("action_language");
   }
-
   if (DEADLINEish.test(blob)) {
-    score += 2;
+    score += 1;
     reasons.push("deadline_language");
   }
 
-  if (GOV_OR_AGENCY.test(email.from) || GOV_OR_AGENCY.test(blob)) {
-    score += 2;
-    reasons.push("gov_or_agency");
-  }
-
-  if (email.links.some((l) => /portal|submit|forms?|grants?|\.gov\//i.test(l))) {
-    score += 1;
-    reasons.push("portal_link");
-  }
-
-  if (email.attachments.some((a) => /\.(pdf|docx?|xlsx?)$/i.test(a.filename))) {
-    score += 1;
-    reasons.push("form_attachment");
-  }
-
-  // Important if we have clear action signal (score >= 3), or a strong subject alone.
-  const important =
-    (score >= 3 && reasons.includes("action_subject")) || score >= 3;
-
-  return { important, score, reasons };
+  reasons.push("inbox_mail");
+  return { important: true, score, reasons };
 }
 
 export function isImportantEmail(email: NormalizedEmail): boolean {
@@ -78,16 +50,14 @@ export function isImportantEmail(email: NormalizedEmail): boolean {
 }
 
 /**
- * Default Gmail search: recent primary mail in the scan window.
- * Keyword filtering happens in-app (isImportantEmail) so "Seen" counts the
- * real window, not only messages that already match compliance phrases.
+ * Recent mail in the scan window (skips promotions/social/chats).
  */
 export function buildImportantGmailQuery(days: number): string {
   const window = `newer_than:${Math.min(90, Math.max(1, days))}d`;
   return `${window} -category:promotions -category:social -category:forums -in:chats`;
 }
 
-/** Drop weak extraction hits so the review queue stays high-signal. */
+/** Keep almost all extracted tasks; only drop empty/junk titles. */
 export function isImportantCandidate(candidate: {
   confidence: number;
   deadline?: string | null;
@@ -95,15 +65,8 @@ export function isImportantCandidate(candidate: {
   title: string;
   missingFields?: string[];
 }): boolean {
-  if (candidate.confidence >= 0.55) return true;
-  if (candidate.deadline) return true;
-  if (candidate.submittedTo && candidate.confidence >= 0.45) return true;
-  if (
-    /\b(submit|file|complete|sign|upload|return|certif|report|pay|deadline|due)\b/i.test(
-      candidate.title,
-    )
-  ) {
-    return true;
-  }
-  return false;
+  const title = candidate.title?.trim() ?? "";
+  if (title.length < 3) return false;
+  if (/^(untitled|n\/a|none|test)$/i.test(title)) return false;
+  return true;
 }

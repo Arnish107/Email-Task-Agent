@@ -7,6 +7,7 @@ import { extractTasks } from "../extraction/agent.js";
 import {
   isImportantCandidate,
   isImportantEmail,
+  MAX_SCAN_MESSAGES,
 } from "../extraction/importance.js";
 import { pool } from "../db/pool.js";
 import { getProvider } from "../providers/index.js";
@@ -137,6 +138,10 @@ export async function processScanJob(jobId: string): Promise<void> {
     );
 
     let candidatesCreated = 0;
+    let messagesProcessed = 0;
+    const startedAt = Date.now();
+    // Leave headroom before Vercel maxDuration so we can still write completion.
+    const deadlineMs = process.env.VERCEL ? 240_000 : 10 * 60_000;
 
     const existingRes = await pool.query<{
       id: string;
@@ -153,6 +158,10 @@ export async function processScanJob(jobId: string): Promise<void> {
     );
 
     for (const messageId of messageIds) {
+      if (Date.now() - startedAt > deadlineMs) {
+        break;
+      }
+      messagesProcessed += 1;
       const email = await provider.fetchMessage(accessToken, messageId, meta);
       if (!isImportantEmail(email)) {
         continue;
@@ -270,7 +279,7 @@ export async function processScanJob(jobId: string): Promise<void> {
        SET status = 'completed', messages_seen = $1, candidates_created = $2,
            completed_at = NOW()
        WHERE id = $3`,
-      [messageIds.length, candidatesCreated, jobId],
+      [messagesProcessed, candidatesCreated, jobId],
     );
     await pool.query(
       `UPDATE mailbox_connections SET last_scan_at = NOW(), updated_at = NOW() WHERE id = $1`,
@@ -282,8 +291,11 @@ export async function processScanJob(jobId: string): Promise<void> {
       eventType: "scan_completed",
       details: {
         jobId,
-        messagesSeen: messageIds.length,
+        messagesListed: messageIds.length,
+        messagesSeen: messagesProcessed,
         candidatesCreated,
+        cappedAt: MAX_SCAN_MESSAGES,
+        timedOutEarly: messagesProcessed < messageIds.length,
       },
     });
   } catch (err) {

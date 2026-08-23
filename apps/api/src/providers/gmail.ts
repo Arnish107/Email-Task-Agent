@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { config } from "../config.js";
+import { MAX_SCAN_MESSAGES } from "../extraction/importance.js";
 import type { EmailProvider, NormalizedEmail, ScanWindow } from "./types.js";
 import {
   decodeBase64Url,
@@ -135,8 +136,7 @@ export class GmailProvider implements EmailProvider {
         if (m.id) ids.push(m.id);
       }
       pageToken = res.data.nextPageToken ?? undefined;
-      // Bound MVP scans
-      if (ids.length >= 100) break;
+      if (ids.length >= MAX_SCAN_MESSAGES) break;
     } while (pageToken);
 
     return ids;

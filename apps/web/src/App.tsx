@@ -578,8 +578,8 @@ function Dashboard({
             <span className="text-gradient">becomes a task</span>
           </h1>
           <p>
-            Connect Gmail or IMAP. We scan for high-signal compliance
-            mail, you approve with evidence, then export JSON.
+            Connect Gmail or IMAP. We scan for actionable mail, you approve with
+            evidence, then export JSON.
           </p>
         </div>
       </header>
@@ -643,7 +643,7 @@ function Dashboard({
           {!gmailReady && (
             <p className="meta" style={{ margin: 0 }}>
               Gmail OAuth is not configured yet — use Any email (IMAP) with an
-              app password, or Offline sample inbox.
+              app password, or offline sample inbox.
             </p>
           )}
 

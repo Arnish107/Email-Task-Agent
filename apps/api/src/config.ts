@@ -70,7 +70,7 @@ export const config = {
     tenantId: process.env.MICROSOFT_TENANT_ID ?? "common",
     redirectUri:
       process.env.MICROSOFT_REDIRECT_URI ??
-      "http://localhost:4000/api/oauth/microsoft/callback",
+      `${vercelOrigin ?? "http://localhost:4000"}/api/oauth/microsoft/callback`,
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY ?? "",

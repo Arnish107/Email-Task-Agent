@@ -1,4 +1,5 @@
 import { config, microsoftConfigured } from "../config.js";
+import { MAX_SCAN_MESSAGES } from "../extraction/importance.js";
 import type { EmailProvider, NormalizedEmail, ScanWindow } from "./types.js";
 import {
   extractLinks,
@@ -137,11 +138,11 @@ export class MicrosoftProvider implements EmailProvider {
 
   async listMessageIds(accessToken: string, window: ScanWindow): Promise<string[]> {
     const since = new Date(Date.now() - window.days * 24 * 60 * 60 * 1000).toISOString();
-    // Prefer $filter on received date; Graph search is optional and tenant-dependent.
-    const filter = `receivedDateTime ge ${since}`;
+    // Broad window: recent non-draft mail (same spirit as Gmail newer_than).
+    const filter = `receivedDateTime ge ${since} and isDraft eq false`;
     const params = new URLSearchParams({
       $select: "id",
-      $top: "50",
+      $top: "100",
       $orderby: "receivedDateTime desc",
       $filter: filter,
     });
@@ -149,7 +150,7 @@ export class MicrosoftProvider implements EmailProvider {
     const ids: string[] = [];
     let url: string | null = `${GRAPH_BASE}/me/messages?${params.toString()}`;
 
-    while (url && ids.length < 100) {
+    while (url && ids.length < MAX_SCAN_MESSAGES) {
       const res: Response = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -162,8 +163,9 @@ export class MicrosoftProvider implements EmailProvider {
       };
       for (const m of data.value ?? []) {
         if (m.id) ids.push(m.id);
+        if (ids.length >= MAX_SCAN_MESSAGES) break;
       }
-      url = data["@odata.nextLink"] ?? null;
+      url = ids.length >= MAX_SCAN_MESSAGES ? null : (data["@odata.nextLink"] ?? null);
     }
 
     return ids;
@@ -245,6 +247,11 @@ export class MicrosoftProvider implements EmailProvider {
 
 export const microsoftProvider = new MicrosoftProvider();
 
-export function microsoftMessageDeepLink(webLink?: string | null): string | null {
-  return webLink || null;
+export function microsoftMessageDeepLink(
+  messageId?: string | null,
+  webLink?: string | null,
+): string | null {
+  if (webLink) return webLink;
+  if (!messageId) return null;
+  return `https://outlook.office.com/mail/deeplink/read/${encodeURIComponent(messageId)}`;
 }

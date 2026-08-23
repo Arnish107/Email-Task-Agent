@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import { MAX_SCAN_MESSAGES } from "../extraction/importance.js";
 import type {
   EmailProvider,
   ImapConnectionMeta,
@@ -123,7 +124,7 @@ export class ImapProvider implements EmailProvider {
       try {
         const uids = await client.search({ since: sinceDate(window.days) }, { uid: true });
         const list = Array.isArray(uids) ? uids : [];
-        return list.slice(-100).map(String).reverse();
+        return list.slice(-MAX_SCAN_MESSAGES).map(String).reverse();
       } finally {
         lock.release();
       }
