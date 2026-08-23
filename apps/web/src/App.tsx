@@ -873,8 +873,9 @@ function Dashboard({
             </label>
           </div>
           <p className="meta" style={{ margin: 0 }}>
-            Automatically focuses on high-signal compliance mail (deadlines,
-            required actions) and skips promotions, social, and FYI noise.
+            Scans the last N days (skips promotions/social).{" "}
+            <strong>Seen</strong> = emails checked;{" "}
+            <strong>Candidates</strong> = actionable items for review.
           </p>
 
           <button
@@ -893,7 +894,7 @@ function Dashboard({
               try {
                 await client.startScan(selectedMailbox, days);
                 setMessage(
-                  `Scan started for the last ${days} day(s). Important messages only.`,
+                  `Scan started for the last ${days} day(s). Skipping promotions/social; only actionable items become candidates.`,
                 );
                 await refresh();
               } catch (err) {

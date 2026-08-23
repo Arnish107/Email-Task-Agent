@@ -66,11 +66,9 @@ export function scoreEmailImportance(email: NormalizedEmail): ImportanceResult {
     reasons.push("form_attachment");
   }
 
-  // Important if we have clear action signal plus at least one supporting cue,
-  // or a very strong subject alone.
-  const important = score >= 3 && reasons.includes("action_subject")
-    ? true
-    : score >= 4;
+  // Important if we have clear action signal (score >= 3), or a strong subject alone.
+  const important =
+    (score >= 3 && reasons.includes("action_subject")) || score >= 3;
 
   return { important, score, reasons };
 }
@@ -79,26 +77,14 @@ export function isImportantEmail(email: NormalizedEmail): boolean {
   return scoreEmailImportance(email).important;
 }
 
-/** Default Gmail search: recent mail that looks actionable, not the whole inbox. */
+/**
+ * Default Gmail search: recent primary mail in the scan window.
+ * Keyword filtering happens in-app (isImportantEmail) so "Seen" counts the
+ * real window, not only messages that already match compliance phrases.
+ */
 export function buildImportantGmailQuery(days: number): string {
   const window = `newer_than:${Math.min(90, Math.max(1, days))}d`;
-  const signals = [
-    "deadline",
-    "due",
-    '"action required"',
-    '"please submit"',
-    '"please complete"',
-    "compliance",
-    "certification",
-    "filing",
-    "grant",
-    "audit",
-    "report due",
-    "must submit",
-    "portal",
-  ].join(" OR ");
-
-  return `${window} (${signals}) -category:promotions -category:social -category:forums`;
+  return `${window} -category:promotions -category:social -category:forums -in:chats`;
 }
 
 /** Drop weak extraction hits so the review queue stays high-signal. */
@@ -109,13 +95,11 @@ export function isImportantCandidate(candidate: {
   title: string;
   missingFields?: string[];
 }): boolean {
-  if (candidate.confidence >= 0.75) return true;
-  if (candidate.deadline && candidate.submittedTo) return true;
-  if (candidate.deadline && candidate.confidence >= 0.55) return true;
+  if (candidate.confidence >= 0.55) return true;
+  if (candidate.deadline) return true;
+  if (candidate.submittedTo && candidate.confidence >= 0.45) return true;
   if (
-    candidate.submittedTo &&
-    candidate.confidence >= 0.6 &&
-    /\b(submit|file|complete|sign|upload|return|certif|report|pay)\b/i.test(
+    /\b(submit|file|complete|sign|upload|return|certif|report|pay|deadline|due)\b/i.test(
       candidate.title,
     )
   ) {
