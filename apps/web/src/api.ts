@@ -88,7 +88,7 @@ function apiUrl(path: string): string {
 async function api<T>(
   path: string,
   init?: RequestInit,
-  timeoutMs = 20_000,
+  timeoutMs = 30_000,
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -125,11 +125,26 @@ async function api<T>(
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       const local =
-        typeof window !== "undefined" && window.location.port === "5173";
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1");
+      if (local) {
+        throw new Error(
+          "Request timed out. Make sure the API is running (npm run dev) on port 4000.",
+        );
+      }
+      if (path.includes("oauth")) {
+        throw new Error(
+          "Gmail connect timed out (server waking up). Wait a few seconds and click Connect Gmail again.",
+        );
+      }
+      if (path.includes("imap")) {
+        throw new Error(
+          "IMAP timed out. For Gmail prefer Connect Gmail (OAuth), or use an App Password with imap.gmail.com:993.",
+        );
+      }
       throw new Error(
-        local
-          ? "Request timed out. Make sure the API is running (npm run dev) on port 4000."
-          : "Request timed out. Gmail IMAP can take a while — try Connect Gmail (OAuth) or the offline sample inbox.",
+        "Request timed out. Wait a moment and try again (first load can be slow).",
       );
     }
     throw err;
@@ -196,7 +211,7 @@ export const client = {
       45_000,
     ),
   startGmailOAuth: () =>
-    api<{ url: string }>("/api/mailboxes/oauth/gmail/start"),
+    api<{ url: string }>("/api/mailboxes/oauth/gmail/start", undefined, 60_000),
   startScan: (mailboxId: string, days: number) =>
     api<{ jobId: string; query: string }>("/api/scans", {
       method: "POST",

@@ -201,16 +201,77 @@ export async function destroySession(req: Request, res: Response): Promise<void>
 
 export { SESSION_COOKIE };
 
+/** Short-lived signed OAuth state (survives Vercel cold starts / ephemeral PGlite). */
+export function signOAuthState(input: {
+  userId: string;
+  provider: "gmail";
+}): string {
+  const exp = Math.floor(Date.now() / 1000) + 10 * 60;
+  const payload = b64url(
+    JSON.stringify({
+      uid: input.userId,
+      provider: input.provider,
+      exp,
+      n: nanoid(8),
+    }),
+  );
+  const sig = b64url(
+    createHmac("sha256", config.sessionSecret).update(`oauth.${payload}`).digest(),
+  );
+  return `o1.${payload}.${sig}`;
+}
+
+export function verifyOAuthState(
+  state: string,
+  provider: "gmail",
+): { userId: string } | null {
+  const parts = state.split(".");
+  if (parts.length !== 3 || parts[0] !== "o1") return null;
+  const [, payload, sig] = parts;
+  const expected = b64url(
+    createHmac("sha256", config.sessionSecret)
+      .update(`oauth.${payload}`)
+      .digest(),
+  );
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const data = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as { uid?: string; provider?: string; exp?: number };
+    if (!data.uid || data.provider !== provider || !data.exp) return null;
+    if (data.exp * 1000 < Date.now()) return null;
+    return { userId: data.uid };
+  } catch {
+    return null;
+  }
+}
+
+/** Ensure a users row exists for a signed-session user (PGlite may have reset). */
+export async function ensureUserRow(user: AuthUser): Promise<void> {
+  await pool.query(
+    `INSERT INTO users (id, email, display_name)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
+    [user.id, user.email, user.displayName],
+  );
+}
+
 export async function demoSignIn(
   email: string,
   res: Response,
 ): Promise<{ user: AuthUser; sessionId: string }> {
   const user = await upsertUser(email);
   const sessionId = await createSession(user, res);
-  await writeAuditLog({
-    userId: user.id,
-    eventType: "user_signed_in",
-    details: { method: "demo" },
-  });
+  try {
+    await writeAuditLog({
+      userId: user.id,
+      eventType: "user_signed_in",
+      details: { method: "demo" },
+    });
+  } catch {
+    // Audit must not block sign-in on ephemeral storage.
+  }
   return { user, sessionId };
 }

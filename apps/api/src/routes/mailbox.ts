@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
 import { writeAuditLog } from "../audit/log.js";
-import { requireAuth } from "../auth/session.js";
+import {
+  ensureUserRow,
+  requireAuth,
+  signOAuthState,
+  verifyOAuthState,
+} from "../auth/session.js";
 import {
   config,
   gmailConfigured,
@@ -193,14 +198,11 @@ mailboxRouter.get("/oauth/gmail/start", async (req, res) => {
     return;
   }
 
-  const state = nanoid(32);
-  const expires = new Date(Date.now() + 10 * 60 * 1000);
-  await pool.query(
-    `INSERT INTO oauth_states (state, user_id, provider, expires_at)
-     VALUES ($1, $2, 'gmail', $3)`,
-    [state, req.user!.id, expires],
-  );
-
+  // Signed state — no DB write required (Vercel PGlite is ephemeral / slow to boot).
+  const state = signOAuthState({
+    userId: req.user!.id,
+    provider: "gmail",
+  });
   const url = getGmailAuthUrl(state);
   res.json({ url });
 });
@@ -253,17 +255,27 @@ async function finishOAuthCallback(
     return;
   }
 
-  const stateRes = await pool.query<{
-    user_id: string;
-    expires_at: Date;
-  }>(
-    `SELECT user_id, expires_at FROM oauth_states WHERE state = $1 AND provider = $2`,
-    [state, provider],
-  );
-  const row = stateRes.rows[0];
-  await pool.query("DELETE FROM oauth_states WHERE state = $1", [state]);
+  let userId: string | null = null;
+  const signed = verifyOAuthState(state, provider);
+  if (signed) {
+    userId = signed.userId;
+  } else {
+    // Legacy DB-backed state (local / older deploys)
+    const stateRes = await pool.query<{
+      user_id: string;
+      expires_at: Date;
+    }>(
+      `SELECT user_id, expires_at FROM oauth_states WHERE state = $1 AND provider = $2`,
+      [state, provider],
+    );
+    const row = stateRes.rows[0];
+    await pool.query("DELETE FROM oauth_states WHERE state = $1", [state]);
+    if (row && new Date(row.expires_at) >= new Date()) {
+      userId = row.user_id;
+    }
+  }
 
-  if (!row || new Date(row.expires_at) < new Date()) {
+  if (!userId) {
     res.status(400).send("Invalid or expired OAuth state");
     return;
   }
@@ -271,10 +283,17 @@ async function finishOAuthCallback(
   try {
     const tokens = await exchangeGmailCode(code);
 
+    // Re-create the user row if this serverless instance has a fresh PGlite DB.
+    await ensureUserRow({
+      id: userId,
+      email: tokens.email,
+      displayName: null,
+    });
+
     const existing = await pool.query<{ id: string }>(
       `SELECT id FROM mailbox_connections
        WHERE user_id = $1 AND provider = $2 AND email_address = $3`,
-      [row.user_id, provider, tokens.email],
+      [userId, provider, tokens.email],
     );
 
     if (existing.rows[0]) {
@@ -291,12 +310,16 @@ async function finishOAuthCallback(
           existing.rows[0].id,
         ],
       );
-      await writeAuditLog({
-        userId: row.user_id,
-        mailboxConnectionId: existing.rows[0].id,
-        eventType: "mailbox_connected",
-        details: { provider, email: tokens.email, refreshed: true },
-      });
+      try {
+        await writeAuditLog({
+          userId,
+          mailboxConnectionId: existing.rows[0].id,
+          eventType: "mailbox_connected",
+          details: { provider, email: tokens.email, refreshed: true },
+        });
+      } catch {
+        // ignore audit failures
+      }
     } else {
       const id = nanoid();
       await pool.query(
@@ -306,7 +329,7 @@ async function finishOAuthCallback(
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,'active')`,
         [
           id,
-          row.user_id,
+          userId,
           provider,
           tokens.email,
           encryptSecret(tokens.accessToken),
@@ -314,12 +337,16 @@ async function finishOAuthCallback(
           tokens.scope,
         ],
       );
-      await writeAuditLog({
-        userId: row.user_id,
-        mailboxConnectionId: id,
-        eventType: "mailbox_connected",
-        details: { provider, email: tokens.email },
-      });
+      try {
+        await writeAuditLog({
+          userId,
+          mailboxConnectionId: id,
+          eventType: "mailbox_connected",
+          details: { provider, email: tokens.email },
+        });
+      } catch {
+        // ignore audit failures
+      }
     }
 
     res.redirect(`${config.webBaseUrl}/?oauth=success&provider=${provider}`);
