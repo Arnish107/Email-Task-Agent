@@ -8,6 +8,8 @@ import {
   isImportantCandidate,
   isImportantEmail,
   MAX_SCAN_MESSAGES,
+  parseSelectivity,
+  type Selectivity,
 } from "../extraction/importance.js";
 import { pool } from "../db/pool.js";
 import { getProvider } from "../providers/index.js";
@@ -92,11 +94,14 @@ export async function processScanJob(jobId: string): Promise<void> {
     id: string;
     mailbox_connection_id: string;
     query: string;
+    selectivity: string | null;
     window_start: Date | null;
     window_end: Date | null;
   }>("SELECT * FROM email_scan_jobs WHERE id = $1", [jobId]);
   const job = jobRes.rows[0];
   if (!job) return;
+
+  const selectivity: Selectivity = parseSelectivity(job.selectivity);
 
   const mailboxRes = await pool.query<MailboxRow>(
     "SELECT * FROM mailbox_connections WHERE id = $1",
@@ -163,19 +168,19 @@ export async function processScanJob(jobId: string): Promise<void> {
       }
       messagesProcessed += 1;
       const email = await provider.fetchMessage(accessToken, messageId, meta);
-      if (!isImportantEmail(email)) {
+      if (!isImportantEmail(email, selectivity)) {
         continue;
       }
 
       const hash = bodyHash(email.bodyText);
-      const extraction = await extractTasks(email);
+      const extraction = await extractTasks(email, selectivity);
 
       if (!extraction.containsTask || extraction.candidates.length === 0) {
         continue;
       }
 
       for (const candidate of extraction.candidates) {
-        if (!isImportantCandidate(candidate)) {
+        if (!isImportantCandidate(candidate, selectivity)) {
           continue;
         }
 
@@ -294,6 +299,7 @@ export async function processScanJob(jobId: string): Promise<void> {
         messagesListed: messageIds.length,
         messagesSeen: messagesProcessed,
         candidatesCreated,
+        selectivity,
         cappedAt: MAX_SCAN_MESSAGES,
         timedOutEarly: messagesProcessed < messageIds.length,
       },

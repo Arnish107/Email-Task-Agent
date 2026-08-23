@@ -18,6 +18,7 @@ export type ScanJob = {
   mailbox_connection_id: string;
   status: string;
   query: string;
+  selectivity?: string;
   window_start: string | null;
   window_end: string | null;
   messages_seen: number;
@@ -135,6 +136,8 @@ async function api<T>(
       }
       if (path.includes("oauth")) {
         throw new Error(
+      if (path.includes("oauth")) {
+        throw new Error(
           "Gmail connect timed out (server waking up). Wait a few seconds and click Connect Gmail again.",
         );
       }
@@ -212,12 +215,16 @@ export const client = {
     ),
   startGmailOAuth: () =>
     api<{ url: string }>("/api/mailboxes/oauth/gmail/start", undefined, 60_000),
-  startScan: (mailboxId: string, days: number) =>
-    api<{ jobId: string; query: string }>(
+  startScan: (
+    mailboxId: string,
+    days: number,
+    selectivity: "relaxed" | "balanced" | "strict" = "balanced",
+  ) =>
+    api<{ jobId: string; query: string; selectivity?: string }>(
       "/api/scans",
       {
         method: "POST",
-        body: JSON.stringify({ mailboxId, days }),
+        body: JSON.stringify({ mailboxId, days, selectivity }),
       },
       55_000,
     ),

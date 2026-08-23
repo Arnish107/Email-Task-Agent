@@ -395,6 +395,9 @@ function Dashboard({
   const [gmailReady, setGmailReady] = useState(false);
   const [selectedMailbox, setSelectedMailbox] = useState("");
   const [days, setDays] = useState(7);
+  const [selectivity, setSelectivity] = useState<
+    "relaxed" | "balanced" | "strict"
+  >("balanced");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState("needs_review");
   const [message, setMessage] = useState<string | null>(null);
@@ -643,7 +646,7 @@ function Dashboard({
           {!gmailReady && (
             <p className="meta" style={{ margin: 0 }}>
               Gmail OAuth is not configured yet — use Any email (IMAP) with an
-              app password, or offline sample inbox.
+              app password, or Offline sample inbox.
             </p>
           )}
 
@@ -871,11 +874,28 @@ function Dashboard({
                 onChange={(e) => setDays(Number(e.target.value))}
               />
             </label>
+            <label style={{ flex: 1, maxWidth: 280 }}>
+              Selectivity
+              <select
+                value={selectivity}
+                onChange={(e) =>
+                  setSelectivity(
+                    e.target.value as "relaxed" | "balanced" | "strict",
+                  )
+                }
+              >
+                <option value="relaxed">Relaxed — catch more</option>
+                <option value="balanced">Balanced — default</option>
+                <option value="strict">Strict — high-signal only</option>
+              </select>
+            </label>
           </div>
           <p className="meta" style={{ margin: 0 }}>
-            Scans the last N days (skips promotions/social).{" "}
-            <strong>Seen</strong> = emails checked;{" "}
-            <strong>Candidates</strong> = actionable items for review.
+            {selectivity === "relaxed"
+              ? "Processes most inbox mail and keeps weaker task guesses. Best if you got 0 candidates before."
+              : selectivity === "strict"
+                ? "Only deadlines / action-required style mail, and high-confidence tasks."
+                : "Skips promotions and obvious noise; keeps clear asks and likely deadlines."}
           </p>
 
           <button
@@ -892,9 +912,9 @@ function Dashboard({
               setBusy(true);
               setError(null);
               try {
-                await client.startScan(selectedMailbox, days);
+                await client.startScan(selectedMailbox, days, selectivity);
                 setMessage(
-                  `Scan started for the last ${days} day(s). Skipping promotions/social; only actionable items become candidates.`,
+                  `Scan started for the last ${days} day(s) (${selectivity} selectivity).`,
                 );
                 await refresh();
               } catch (err) {
@@ -915,6 +935,7 @@ function Dashboard({
               <thead>
                 <tr>
                   <th>Status</th>
+                  <th>Selectivity</th>
                   <th>Seen</th>
                   <th>Candidates</th>
                   <th>When</th>
@@ -929,6 +950,7 @@ function Dashboard({
                         <div className="meta">{j.error_message}</div>
                       )}
                     </td>
+                    <td>{j.selectivity ?? "balanced"}</td>
                     <td>{j.messages_seen}</td>
                     <td>{j.candidates_created}</td>
                     <td>{fmtDate(j.created_at)}</td>

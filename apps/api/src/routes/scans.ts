@@ -2,7 +2,10 @@ import { Router } from "express";
 import { nanoid } from "nanoid";
 import { writeAuditLog } from "../audit/log.js";
 import { pool } from "../db/pool.js";
-import { buildImportantGmailQuery } from "../extraction/importance.js";
+import {
+  buildImportantGmailQuery,
+  parseSelectivity,
+} from "../extraction/importance.js";
 import { enqueueScanJob, runScanJob } from "../jobs/scanWorker.js";
 
 export const scansRouter = Router();
@@ -21,6 +24,7 @@ async function assertMailboxOwned(mailboxId: string, userId: string) {
 scansRouter.post("/", async (req, res) => {
   const mailboxId = String(req.body?.mailboxId ?? "");
   const days = Math.min(90, Math.max(1, Number(req.body?.days ?? 7)));
+  const selectivity = parseSelectivity(req.body?.selectivity);
   const customQuery = req.body?.query ? String(req.body.query) : null;
 
   const mailbox = await assertMailboxOwned(mailboxId, req.user!.id);
@@ -37,24 +41,22 @@ scansRouter.post("/", async (req, res) => {
   const query =
     customQuery?.trim() ||
     (mailbox.provider === "gmail"
-      ? buildImportantGmailQuery(days)
-      : mailbox.provider === "microsoft"
-        ? `important_last_${days}_days`
-        : `important_last_${days}_days`);
+      ? buildImportantGmailQuery(days, selectivity)
+      : `last_${days}_days`);
 
   const id = nanoid();
   await pool.query(
     `INSERT INTO email_scan_jobs (
-      id, mailbox_connection_id, status, query, window_start, window_end
-    ) VALUES ($1,$2,'queued',$3,$4,$5)`,
-    [id, mailboxId, query, windowStart, windowEnd],
+      id, mailbox_connection_id, status, query, selectivity, window_start, window_end
+    ) VALUES ($1,$2,'queued',$3,$4,$5,$6)`,
+    [id, mailboxId, query, selectivity, windowStart, windowEnd],
   );
 
   await writeAuditLog({
     userId: req.user!.id,
     mailboxConnectionId: mailboxId,
     eventType: "scan_started",
-    details: { jobId: id, query, days, importantOnly: true },
+    details: { jobId: id, query, days, selectivity },
   });
 
   if (process.env.VERCEL) {
@@ -67,6 +69,7 @@ scansRouter.post("/", async (req, res) => {
   res.status(201).json({
     jobId: id,
     query,
+    selectivity,
     windowStart,
     windowEnd,
   });

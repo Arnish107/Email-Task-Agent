@@ -1,7 +1,11 @@
 import { config } from "../config.js";
 import type { NormalizedEmail } from "../providers/types.js";
 import { fallbackExtract } from "./fallback.js";
-import { buildExtractionUserPrompt, EXTRACTION_SYSTEM_PROMPT } from "./prompt.js";
+import type { Selectivity } from "./importance.js";
+import {
+  buildExtractionSystemPrompt,
+  buildExtractionUserPrompt,
+} from "./prompt.js";
 import {
   type ExtractionResult,
   validateExtractionResult,
@@ -38,8 +42,12 @@ function extractJsonObject(text: string): unknown {
   }
 }
 
-async function geminiExtract(email: NormalizedEmail): Promise<ExtractionResult> {
-  const prompt = `${EXTRACTION_SYSTEM_PROMPT}
+async function geminiExtract(
+  email: NormalizedEmail,
+  selectivity: Selectivity,
+): Promise<ExtractionResult> {
+  const system = buildExtractionSystemPrompt(selectivity);
+  const prompt = `${system}
 
 ${buildExtractionUserPrompt(JSON.stringify(emailForModel(email), null, 2))}
 
@@ -78,13 +86,15 @@ Return only valid JSON.`;
 
 async function openaiCompatibleExtract(
   email: NormalizedEmail,
+  selectivity: Selectivity,
 ): Promise<ExtractionResult> {
+  const system = buildExtractionSystemPrompt(selectivity);
   const payload = {
     model: config.openai.model,
     temperature: 0,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+      { role: "system", content: system },
       {
         role: "user",
         content: buildExtractionUserPrompt(JSON.stringify(emailForModel(email), null, 2)),
@@ -116,19 +126,25 @@ async function openaiCompatibleExtract(
   return validateExtractionResult(extractJsonObject(content));
 }
 
-async function llmExtract(email: NormalizedEmail): Promise<ExtractionResult> {
+async function llmExtract(
+  email: NormalizedEmail,
+  selectivity: Selectivity,
+): Promise<ExtractionResult> {
   if (config.gemini.apiKey) {
-    return geminiExtract(email);
+    return geminiExtract(email, selectivity);
   }
-  return openaiCompatibleExtract(email);
+  return openaiCompatibleExtract(email, selectivity);
 }
 
-export async function extractTasks(email: NormalizedEmail): Promise<ExtractionResult> {
+export async function extractTasks(
+  email: NormalizedEmail,
+  selectivity: Selectivity = "balanced",
+): Promise<ExtractionResult> {
   if (!config.gemini.apiKey && !config.openai.apiKey) {
     return fallbackExtract(email);
   }
   try {
-    return await llmExtract(email);
+    return await llmExtract(email, selectivity);
   } catch (err) {
     console.warn("LLM extraction failed; using fallback parser", err);
     return fallbackExtract(email);
