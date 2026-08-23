@@ -136,8 +136,6 @@ async function api<T>(
       }
       if (path.includes("oauth")) {
         throw new Error(
-      if (path.includes("oauth")) {
-        throw new Error(
           "Gmail connect timed out (server waking up). Wait a few seconds and click Connect Gmail again.",
         );
       }
