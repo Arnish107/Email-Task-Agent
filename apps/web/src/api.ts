@@ -227,6 +227,10 @@ export const client = {
       55_000,
     ),
   scans: () => api<{ jobs: ScanJob[] }>("/api/scans"),
+  clearScanHistory: () =>
+    api<{ ok: boolean; deletedJobs: number }>("/api/scans", {
+      method: "DELETE",
+    }),
   candidates: (status?: string) =>
     api<{ candidates: Candidate[] }>(
       status ? `/api/candidates?status=${encodeURIComponent(status)}` : "/api/candidates",

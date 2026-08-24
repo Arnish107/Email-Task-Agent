@@ -1,6 +1,6 @@
 -- Per-scan selectivity: how picky filtering + extraction should be.
 ALTER TABLE email_scan_jobs
-  ADD COLUMN IF NOT EXISTS selectivity TEXT NOT NULL DEFAULT 'balanced';
+  ADD COLUMN IF NOT EXISTS selectivity TEXT NOT NULL DEFAULT 'relaxed';
 
 ALTER TABLE email_scan_jobs
   DROP CONSTRAINT IF EXISTS email_scan_jobs_selectivity_check;

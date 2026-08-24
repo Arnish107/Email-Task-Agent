@@ -7,6 +7,7 @@ export type AuditEventType =
   | "scan_started"
   | "scan_completed"
   | "scan_failed"
+  | "scan_history_cleared"
   | "candidate_created"
   | "candidate_approved"
   | "candidate_ignored"

@@ -958,7 +958,54 @@ function Dashboard({
             Start scan
           </button>
 
-          <h3>Scan history</h3>
+          <div className="section-head row" style={{ justifyContent: "space-between" }}>
+            <h3 style={{ margin: 0 }}>Scan history</h3>
+            <button
+              className="btn secondary"
+              type="button"
+              disabled={
+                busy ||
+                jobs.length === 0 ||
+                jobs.some((j) => j.status === "queued" || j.status === "running")
+              }
+              title={
+                jobs.some((j) => j.status === "queued" || j.status === "running")
+                  ? "Wait for the current scan to finish"
+                  : jobs.length === 0
+                    ? "No scan history to clear"
+                    : "Remove all past scans and their candidates"
+              }
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    "Clear all scan history? This removes past scan records and every candidate from those scans. This cannot be undone.",
+                  )
+                ) {
+                  return;
+                }
+                setBusy(true);
+                setError(null);
+                try {
+                  const res = await client.clearScanHistory();
+                  setMessage(
+                    res.deletedJobs > 0
+                      ? `Cleared ${res.deletedJobs} scan(s) from history.`
+                      : "Scan history is already empty.",
+                  );
+                  setSelectedId(null);
+                  await refresh();
+                } catch (err) {
+                  setError(
+                    err instanceof Error ? err.message : "Could not clear history",
+                  );
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Clear history
+            </button>
+          </div>
           {jobs.length === 0 ? (
             <div className="empty">No scans yet. Connect a mailbox, then start a scan.</div>
           ) : (

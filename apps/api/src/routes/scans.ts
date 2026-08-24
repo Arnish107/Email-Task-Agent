@@ -88,6 +88,38 @@ scansRouter.get("/", async (req, res) => {
   res.json({ jobs: result.rows });
 });
 
+scansRouter.delete("/", async (req, res) => {
+  const active = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM email_scan_jobs j
+     JOIN mailbox_connections m ON m.id = j.mailbox_connection_id
+     WHERE m.user_id = $1 AND j.status IN ('queued', 'running')`,
+    [req.user!.id],
+  );
+  if (Number(active.rows[0]?.count ?? 0) > 0) {
+    res.status(409).json({
+      error: "A scan is still running. Wait for it to finish, then clear history.",
+    });
+    return;
+  }
+
+  const deleted = await pool.query<{ id: string }>(
+    `DELETE FROM email_scan_jobs j
+     USING mailbox_connections m
+     WHERE j.mailbox_connection_id = m.id AND m.user_id = $1
+     RETURNING j.id`,
+    [req.user!.id],
+  );
+
+  await writeAuditLog({
+    userId: req.user!.id,
+    eventType: "scan_history_cleared",
+    details: { deletedJobs: deleted.rowCount ?? 0 },
+  });
+
+  res.json({ ok: true, deletedJobs: deleted.rowCount ?? 0 });
+});
+
 scansRouter.get("/:id", async (req, res) => {
   const result = await pool.query(
     `SELECT j.*
